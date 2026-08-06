@@ -115,9 +115,9 @@ function procesarDatos() {
 
     for (const key in agrupado) {
         const valores = agrupado[key];
-        // Calcular promedio simple para proyección
-        const sum = valores.reduce((a, b) => a + b, 0);
-        proyeccionPorSucursal[key] = sum / valores.length;
+        // Proyección mediante Regresión Lineal y filtro IQR
+        const { clean } = filterOutliersIQR(valores);
+        proyeccionPorSucursal[key] = linearRegression(clean);
     }
 
     // 2. Indexar Inventario Actual y Órdenes
@@ -185,13 +185,41 @@ function procesarDatos() {
             });
         });
     });
+
+    // Cross Anomalies
+    resultados.crossAnomalias = [];
+    const groupedByIngrediente = {};
+    resultados.forEach(r => {
+        if (!groupedByIngrediente[r.ingrediente.ingrediente_id]) groupedByIngrediente[r.ingrediente.ingrediente_id] = [];
+        groupedByIngrediente[r.ingrediente.ingrediente_id].push(r);
+    });
+
+    for (const ingId in groupedByIngrediente) {
+        const group = groupedByIngrediente[ingId];
+        if (group.length < 3) continue;
+        const consumos = group.map(g => g.ordenActual);
+        const zScores = getZScores(consumos);
+        zScores.forEach((z, i) => {
+            if (Math.abs(z) > 1.8) {
+                resultados.crossAnomalias.push({
+                    sucursal: group[i].sucursal,
+                    ingrediente_id: ingId,
+                    nombre: group[i].ingrediente.nombre,
+                    z: z.toFixed(2),
+                    direction: z > 0 ? 'alto' : 'bajo',
+                    ordenActual: group[i].ordenActual
+                });
+            }
+        });
+    }
 }
 
 // Renderizado de UI
 function renderizarUI() {
     renderKPIs();
     renderFiltroSucursales();
-    renderAlertas('all');
+    renderAlertas(document.getElementById('filter-sucursal')?.value || 'all');
+    if (typeof renderCrossAnomalias === 'function') renderCrossAnomalias();
     renderTablaOrdenes();
     renderPorProveedor();
     renderRedistribucion();
@@ -233,7 +261,27 @@ function renderAlertas(filtroSucursal) {
     const container = document.getElementById('alerts-container');
     container.innerHTML = '';
 
-    const alertas = resultados.filter(r => r.alerta && (filtroSucursal === 'all' || r.sucursal === filtroSucursal));
+    const searchTerm = (document.getElementById('filter-search')?.value || '').toLowerCase();
+    const severityFilter = document.getElementById('filter-severity')?.value || 'all';
+
+    const alertas = resultados.filter(r => {
+        if (!r.alerta) return false;
+        if (filtroSucursal !== 'all' && r.sucursal !== filtroSucursal) return false;
+        
+        let sevMatch = true;
+        if (severityFilter !== 'all') {
+            if (severityFilter === 'alta' && r.alerta.severidad !== 'alta') sevMatch = false;
+            if (severityFilter === 'media' && r.alerta.severidad !== 'media') sevMatch = false;
+            if (severityFilter === 'baja' && r.alerta.severidad !== 'baja') sevMatch = false;
+        }
+        if (!sevMatch) return false;
+
+        if (searchTerm) {
+            const txt = `${r.sucursal} ${r.ingrediente.nombre} ${r.alerta.mensaje}`.toLowerCase();
+            if (!txt.includes(searchTerm)) return false;
+        }
+        return true;
+    });
     
     // Ordenar: Quiebres primero, luego sobrepedidos por costo
     alertas.sort((a, b) => {
@@ -605,6 +653,125 @@ function addChatMessage(sender, text, id = null) {
     lucide.createIcons();
     container.scrollTop = container.scrollHeight;
 }
+
+// --- NUEVAS FUNCIONES ESTADÍSTICAS ---
+function filterOutliersIQR(values) {
+  if (values.length < 4) return { clean: values, outliers: [] };
+  const sorted = [...values].sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(sorted.length * 0.25)];
+  const q3 = sorted[Math.floor(sorted.length * 0.75)];
+  const iqr = q3 - q1;
+  const lo = q1 - 1.5 * iqr;
+  const hi = q3 + 1.5 * iqr;
+  const clean = [];
+  const outliers = [];
+  values.forEach((v, i) => {
+    if (v >= lo && v <= hi) clean.push({ v, i });
+    else outliers.push({ v, i });
+  });
+  return { clean: clean.map(x => x.v), outlierIndices: outliers.map(x => x.i), outliers: outliers.map(x => x.v) };
+}
+
+function linearRegression(values) {
+  if (values.length === 0) return 0;
+  if (values.length === 1) return values[0];
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  const n = values.length;
+  for (let i = 0; i < n; i++) {
+    sumX += i;
+    sumY += values[i];
+    sumXY += i * values[i];
+    sumXX += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+  return slope * n + intercept;
+}
+
+function getZScores(values) {
+  const n = values.length;
+  if (n < 2) return values.map(() => 0);
+  const mean = values.reduce((a, b) => a + b) / n;
+  const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1);
+  const std = Math.sqrt(variance);
+  if (std === 0) return values.map(() => 0);
+  return values.map(v => (v - mean) / std);
+}
+
+// --- NUEVA LÓGICA DE DRAG & DROP ---
+window.handleFileUpload = function(input, type) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    
+    Papa.parse(file, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            datos[type] = results.data;
+            document.getElementById(`status-` + type).innerText = 'Actualizado localmente';
+            document.getElementById(`status-` + type).className = 'text-emerald-400 font-bold mt-3 px-2 py-1 bg-slate-800 rounded';
+            
+            // Recalcular
+            procesarDatos();
+            renderizarUI();
+        }
+    });
+};
+
+// --- RENDER ANOMALÍAS CRUZADAS ---
+window.renderCrossAnomalias = function() {
+    const container = document.getElementById('cross-anomalias-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (!resultados.crossAnomalias || resultados.crossAnomalias.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-sm">No se detectaron anomalías matemáticas entre sucursales.</p>';
+        return;
+    }
+    
+    resultados.crossAnomalias.forEach(a => {
+        const div = document.createElement('div');
+        div.className = "flex items-center gap-3 p-3 bg-slate-900 border border-slate-700 rounded-lg";
+        const isAlto = a.direction === 'alto';
+        const icon = isAlto ? '<i data-lucide="trending-up" class="w-4 h-4 text-orange-400"></i>' : '<i data-lucide="trending-down" class="w-4 h-4 text-blue-400"></i>';
+        
+        div.innerHTML = `
+            <div class="flex-shrink-0">
+                ${icon}
+            </div>
+            <div>
+                <p class="text-sm">
+                    <span class="font-bold text-slate-200">${a.sucursal}</span> pidió 
+                    <span class="font-bold ${isAlto ? 'text-orange-400' : 'text-blue-400'}">${a.ordenActual} formatos</span> de 
+                    <span class="font-bold text-slate-200">${a.nombre}</span>.
+                </p>
+                <p class="text-xs text-slate-400">Valor atípico detectado estadísticamente (Z = ${a.z}σ).</p>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+    lucide.createIcons();
+}
+
+// --- EXPORTACIÓN ---
+window.exportAlertas = function() {
+    const alertas = resultados.filter(r => r.alerta);
+    let csv = "Sucursal,Ingrediente,TipoAlerta,Severidad,Mensaje,CostoExceso\n";
+    alertas.forEach(r => {
+        csv += `"${r.sucursal}","${r.ingrediente.nombre}","${r.alerta.tipo}","${r.alerta.severidad}","${r.alerta.mensaje}",${r.costoExceso}\n`;
+    });
+    if(window.downloadCSV) window.downloadCSV(csv, 'alertas_prioritarias.csv');
+};
+
+window.exportDatosCompletos = function() {
+    let csv = "Sucursal,Ingrediente,Proveedor,NecesidadFormatos,OrdenActual,Status\n";
+    resultados.forEach(r => {
+        const stat = r.alerta ? (r.alerta.tipo==='quiebre'?'Faltante':'Exceso') : 'OK';
+        csv += `"${r.sucursal}","${r.ingrediente.nombre}","${r.ingrediente.proveedor}",${r.necesidadFormatos},${r.ordenActual},"${stat}"\n`;
+    });
+    if(window.downloadCSV) window.downloadCSV(csv, 'analisis_ordenes_completo.csv');
+};
 
 // Inicializar la app al cargar
 document.addEventListener('DOMContentLoaded', init);
