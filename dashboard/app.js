@@ -239,20 +239,36 @@ function renderKPIs() {
 }
 
 function renderFiltroSucursales() {
-    const select = document.getElementById('filter-sucursal');
     const sucursales = [...new Set(resultados.map(r => r.sucursal))];
-    
-    // Evitar duplicados si re-renderiza
-    if (select.options.length === 1) {
+
+    // Dashboard sucursal buttons
+    const grpDash = document.getElementById('sucursal-btn-group');
+    if (grpDash) {
+        // Keep only the "all" button, then add one per branch
+        grpDash.innerHTML = '<button onclick="setSucursal(\'all\')" id="suc-all" class="suc-btn px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-slate-600 border-slate-500 text-white">Todas las sucursales</button>';
         sucursales.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s;
-            opt.innerText = s;
-            select.appendChild(opt);
+            const safeId = s.replace(/[\s]/g, '_');
+            const btn = document.createElement('button');
+            btn.id = 'suc-' + safeId;
+            btn.className = 'suc-btn px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500';
+            btn.textContent = s;
+            btn.onclick = () => setSucursal(s);
+            grpDash.appendChild(btn);
         });
-        
-        select.addEventListener('change', (e) => {
-            renderAlertas(e.target.value);
+    }
+
+    // Ordenes sucursal buttons
+    const grpOrd = document.getElementById('ordenes-sucursal-btn-group');
+    if (grpOrd) {
+        grpOrd.innerHTML = '<button onclick="setOrdenesSucursal(\'all\')" id="ord-suc-all" class="ord-suc-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 text-white">Todas las sucursales</button>';
+        sucursales.forEach(s => {
+            const safeId = s.replace(/[\s]/g, '_');
+            const btn = document.createElement('button');
+            btn.id = 'ord-suc-' + safeId;
+            btn.className = 'ord-suc-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600';
+            btn.textContent = s;
+            btn.onclick = () => setOrdenesSucursal(s);
+            grpOrd.appendChild(btn);
         });
     }
 }
@@ -262,7 +278,7 @@ function renderAlertas(filtroSucursal) {
     container.innerHTML = '';
 
     const searchTerm = (document.getElementById('filter-search')?.value || '').toLowerCase();
-    const severityFilter = document.getElementById('filter-severity')?.value || 'all';
+    const severityFilter = typeof currentSeverity !== 'undefined' ? currentSeverity : 'all';
 
     const alertas = resultados.filter(r => {
         if (!r.alerta) return false;
@@ -344,11 +360,14 @@ function renderAlertas(filtroSucursal) {
     lucide.createIcons();
 }
 
-function renderTablaOrdenes() {
+function renderTablaOrdenes(filtroSucursal) {
+    filtroSucursal = filtroSucursal || 'all';
     const tbody = document.getElementById('table-ordenes-body');
     tbody.innerHTML = '';
 
-    resultados.forEach((r, idx) => {
+    const filas = filtroSucursal === 'all' ? resultados : resultados.filter(r => r.sucursal === filtroSucursal);
+
+    filas.forEach((r, idx) => {
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-800/50 transition-colors";
         
@@ -515,27 +534,36 @@ function renderRedistribucion() {
     container.innerHTML = '';
     const oportunidades = calcularOportunidadesRedistribucion();
 
-    if (oportunidades.length === 0) {
-        container.innerHTML = '<p class="text-slate-400 text-sm">No hay oportunidades claras de redistribución en este momento.</p>';
+    // Pad with illustrative examples if fewer than 3 real ones
+    const ejemplos = [
+        { ingrediente: { nombre: 'Mozzarella', unidad_base: 'kg', es_perecedero: 'Si' }, origen: 'Brisas del Golf', destino: 'Via Argentina', cantidadBase: 15, esPerecedero: true, esEjemplo: true },
+        { ingrediente: { nombre: 'Pepperoni', unidad_base: 'kg', es_perecedero: 'Si' }, origen: 'Costa del Este', destino: 'Marbella', cantidadBase: 8, esPerecedero: true, esEjemplo: true },
+        { ingrediente: { nombre: 'Cebolla', unidad_base: 'kg', es_perecedero: 'No' }, origen: 'Marbella', destino: 'Costa del Este', cantidadBase: 20, esPerecedero: false, esEjemplo: true },
+    ];
+    const mostrar = oportunidades.length >= 2 ? oportunidades : [...oportunidades, ...ejemplos].slice(0, Math.max(3, oportunidades.length));
+
+    if (mostrar.length === 0) {
+        container.innerHTML = '<p class="text-slate-400 text-sm">No hay oportunidades claras de redistribucion en este momento.</p>';
         return;
     }
 
-    oportunidades.forEach(op => {
+    mostrar.forEach(op => {
         const div = document.createElement('div');
         div.className = `p-4 rounded-xl border flex items-center justify-between ${
             op.esPerecedero ? 'bg-orange-500/10 border-orange-500/20' : 'bg-slate-700 border-slate-600'
         }`;
         
         let badge = op.esPerecedero ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold ml-2">Perecedero</span>' : '';
+        let ejemploBadge = op.esEjemplo ? '<span class="ml-2 bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Ejemplo</span>' : '';
 
         div.innerHTML = `
             <div class="flex items-center gap-4">
-                <div class="flex flex-col items-center justify-center w-12 h-12 bg-slate-800 rounded-lg border border-slate-600 shadow-inner">
+                <div class="flex flex-col items-center justify-center w-12 h-12 bg-slate-800 rounded-lg border border-slate-600">
                     <span class="text-xs text-slate-400">${op.ingrediente.unidad_base}</span>
                     <span class="font-bold">${op.cantidadBase.toFixed(1)}</span>
                 </div>
                 <div>
-                    <h4 class="font-bold flex items-center">${op.ingrediente.nombre} ${badge}</h4>
+                    <h4 class="font-bold flex items-center">${op.ingrediente.nombre} ${badge} ${ejemploBadge}</h4>
                     <div class="flex items-center gap-2 mt-1 text-sm text-slate-300">
                         <span class="text-red-400 bg-red-400/10 px-2 py-0.5 rounded">${op.origen}</span>
                         <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
@@ -543,20 +571,21 @@ function renderRedistribucion() {
                     </div>
                 </div>
             </div>
-            <button class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                Generar Traslado
-            </button>
+            <button class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors">Generar Traslado</button>
         `;
         container.appendChild(div);
     });
+    lucide.createIcons();
 }
 
-// Lógica de Chat IA
+// Lógica de Chat IA — con conexion real a Gemini/OpenAI
 window.saveApiKey = function() {
-    api_key = document.getElementById('api-key-input').value;
+    api_key = document.getElementById('api-key-input').value.trim();
     ai_provider = document.getElementById('api-provider').value;
     document.getElementById('api-key-modal').classList.add('hidden');
-    addChatMessage('bot', `API Key guardada exitosamente. El proveedor seleccionado es ${ai_provider}. Ahora puedes hacer preguntas complejas.`);
+    const label = document.getElementById('ai-status-label');
+    if (label) label.innerText = `Conectado a ${ai_provider === 'gemini' ? 'Google Gemini' : 'OpenAI'}`;
+    addChatMessage('bot', `API Key guardada. Ahora usare <b>${ai_provider === 'gemini' ? 'Google Gemini' : 'ChatGPT (OpenAI)'}</b> para responder tus preguntas en tiempo real.`);
 };
 
 window.sendFAQ = function(text) {
@@ -572,27 +601,66 @@ window.sendChatMessage = function() {
     addChatMessage('user', msg);
     input.value = '';
 
-    // Mostrar "escribiendo"
     const typingId = 'typing-' + Date.now();
     addChatMessage('bot', '<span class="animate-pulse">Pensando...</span>', typingId);
 
-    setTimeout(() => {
-        const typingEl = document.getElementById(typingId);
-        if (typingEl) typingEl.remove();
-
-        // Lógica de respuestas (Mock o simulación de LLM local basado en FAQs)
-        let respuesta = '';
-        const m = msg.toLowerCase();
-
-        if (api_key) {
-            respuesta = "<i>[Modo API Activo]</i> Consultando a " + ai_provider + "... En un entorno real, aquí se conectaría con fetch a la API. Como esto es una demostración local, simulo la respuesta: " + generarRespuestaBasica(m);
-        } else {
-            respuesta = generarRespuestaBasica(m);
-        }
-
-        addChatMessage('bot', respuesta);
-    }, 800);
+    if (api_key) {
+        // Call real AI API
+        callAI(msg).then(resp => {
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            addChatMessage('bot', resp);
+        }).catch(err => {
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            addChatMessage('bot', 'Error al conectar con la IA: ' + err.message + '. Verifica tu API Key.');
+        });
+    } else {
+        setTimeout(() => {
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            addChatMessage('bot', generarRespuestaBasica(msg.toLowerCase()));
+        }, 700);
+    }
 };
+
+async function callAI(userMsg) {
+    // Build context from current data
+    const totalQuiebres = resultados.filter(r => r.alerta?.tipo === 'quiebre').length;
+    const costoTotal = resultados.reduce((s, r) => s + r.costoExceso, 0).toFixed(2);
+    const sucursales = [...new Set(resultados.map(r => r.sucursal))].join(', ');
+    const context = `Eres un asistente de compras para la cadena de pizzerias Barrio Pizza en Panama. Tienes acceso a los datos de la semana actual: Sucursales: ${sucursales}. Alertas de quiebre (faltantes criticos): ${totalQuiebres}. Gasto en excesos: $${costoTotal}. El usuario pregunta sobre ordenes de compra, inventario, ingredientes y redistribucion entre sucursales. Responde en espanol, de forma concisa y util.`;
+
+    if (ai_provider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${api_key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: context + '\n\nPregunta del usuario: ' + userMsg }] }]
+            })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta.';
+    } else {
+        // OpenAI
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api_key },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: context },
+                    { role: 'user', content: userMsg }
+                ],
+                max_tokens: 300
+            })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        return data.choices?.[0]?.message?.content || 'Sin respuesta.';
+    }
+}
 
 function generarRespuestaBasica(pregunta) {
     if (pregunta.includes('de más') || pregunta.includes('demasiado') || pregunta.includes('exceso')) {
@@ -698,25 +766,34 @@ function getZScores(values) {
   return values.map(v => (v - mean) / std);
 }
 
-// --- NUEVA LÓGICA DE DRAG & DROP ---
+// --- NUEVA LOGICA DE DRAG & DROP (CSV + Excel) ---
 window.handleFileUpload = function(input, type) {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
-    
-    Papa.parse(file, {
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-            datos[type] = results.data;
-            document.getElementById(`status-` + type).innerText = 'Actualizado localmente';
-            document.getElementById(`status-` + type).className = 'text-emerald-400 font-bold mt-3 px-2 py-1 bg-slate-800 rounded';
-            
-            // Recalcular
-            procesarDatos();
-            renderizarUI();
-        }
-    });
+    const name = file.name.toLowerCase();
+    const statusEl = document.getElementById('status-' + type);
+
+    if (name.endsWith('.csv')) {
+        Papa.parse(file, {
+            header: true, dynamicTyping: true, skipEmptyLines: true,
+            complete: function(results) {
+                datos[type] = results.data;
+                if (statusEl) { statusEl.innerText = 'Actualizado correctamente'; statusEl.className = 'text-emerald-400 font-bold'; }
+                procesarDatos(); renderizarUI();
+            }
+        });
+    } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const wb = XLSX.read(e.target.result, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            datos[type] = jsonData;
+            if (statusEl) { statusEl.innerText = 'Excel cargado correctamente'; statusEl.className = 'text-emerald-400 font-bold'; }
+            procesarDatos(); renderizarUI();
+        };
+        reader.readAsArrayBuffer(file);
+    }
 };
 
 // --- RENDER ANOMALÍAS CRUZADAS ---
