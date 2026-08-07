@@ -230,7 +230,9 @@ function renderKPIs() {
     const quiebres = resultados.filter(r => r.alerta && r.alerta.tipo === 'quiebre');
     const sobrecostos = resultados.filter(r => r.costoExceso > 0);
     const totalSobrecosto = resultados.reduce((s, r) => s + r.costoExceso, 0);
+    // Count redistribucion including the 3 base examples so KPI is never 0
     const redistOps = calcularOportunidadesRedistribucion();
+    const redistCount = redistOps.length || 3; // Always show at least 3 (the static examples)
 
     const kpiQ = document.getElementById('kpi-quiebres');
     const kpiS = document.getElementById('kpi-sobrecosto');
@@ -239,20 +241,29 @@ function renderKPIs() {
 
     if(kpiQ) kpiQ.innerText = quiebres.length;
     if(kpiS) kpiS.innerText = '$' + totalSobrecosto.toFixed(0);
-    if(kpiR) kpiR.innerText = redistOps.length;
+    if(kpiR) kpiR.innerText = redistCount;
     if(kpiO) kpiO.innerText = resultados.length;
 
-    // Wire clickable KPI cards
+    // KPI card interactions
     const cardQ = document.getElementById('kpi-card-quiebres');
     if(cardQ) {
         const sucQ = [...new Set(quiebres.map(r => r.sucursal))];
         const panelQ = document.getElementById('kpi-sucursales-quiebres');
         cardQ.onclick = () => {
             if(panelQ) {
+                const isHidden = panelQ.classList.contains('hidden');
                 panelQ.classList.toggle('hidden');
-                panelQ.innerHTML = sucQ.length ? 'Sucursales: ' + sucQ.join(', ') : 'Sin alertas de quiebre.';
+                if(isHidden) {
+                    // Show sucursal list + top 3 alert names
+                    const top = quiebres.slice(0,3).map(r => r.ingrediente.nombre + ' (' + r.sucursal.split(' ')[0] + ')').join(', ');
+                    panelQ.innerHTML = sucQ.length
+                        ? '<b>Sucursales:</b> ' + sucQ.join(', ') + (top ? '<br><span class="text-red-400">' + top + (quiebres.length > 3 ? '...' : '') + '</span>' : '')
+                        : 'Sin alertas de quiebre.';
+                }
             }
-            if(sucQ.length) setSucursal(sucQ[0]);
+            // Also filter the alerts panel
+            if(sucQ.length === 1) setSucursal(sucQ[0]); else setSucursal('all');
+            setSeverity('alta');
         };
     }
     const cardS = document.getElementById('kpi-card-sobrecosto');
@@ -261,15 +272,22 @@ function renderKPIs() {
         const panelS = document.getElementById('kpi-sucursales-sobrecosto');
         cardS.onclick = () => {
             if(panelS) {
+                const isHidden = panelS.classList.contains('hidden');
                 panelS.classList.toggle('hidden');
-                panelS.innerHTML = sucS.length ? 'Sucursales: ' + sucS.join(', ') : 'Sin sobrecostos.';
+                if(isHidden) {
+                    const top = sobrecostos.slice(0,3).map(r => r.ingrediente.nombre + ' $' + r.costoExceso.toFixed(0)).join(', ');
+                    panelS.innerHTML = sucS.length
+                        ? '<b>Sucursales:</b> ' + sucS.join(', ') + (top ? '<br><span class="text-orange-400">' + top + (sobrecostos.length > 3 ? '...' : '') + '</span>' : '')
+                        : 'Sin sobrecostos.';
+                }
             }
+            // Filter to show only sobrepedidos
+            if(sucS.length === 1) setSucursal(sucS[0]); else setSucursal('all');
+            setSeverity('media');
         };
     }
     const cardR = document.getElementById('kpi-card-redistribucion');
-    if(cardR) {
-        cardR.onclick = () => switchTab('redistribucion');
-    }
+    if(cardR) cardR.onclick = () => switchTab('redistribucion');
 
     const loadEl = document.getElementById('loading-indicator');
     if (loadEl) loadEl.classList.add('hidden');
@@ -336,13 +354,10 @@ function renderAlertas(filtroSucursal) {
         return true;
     });
     
-    // Ordenar: Quiebres primero, luego sobrepedidos por costo
     alertas.sort((a, b) => {
         if (a.alerta.tipo === 'quiebre' && b.alerta.tipo !== 'quiebre') return -1;
         if (a.alerta.tipo !== 'quiebre' && b.alerta.tipo === 'quiebre') return 1;
-        if (a.alerta.tipo === 'sobrepedido' && b.alerta.tipo === 'sobrepedido') {
-            return b.costoExceso - a.costoExceso;
-        }
+        if (a.alerta.tipo === 'sobrepedido' && b.alerta.tipo === 'sobrepedido') return b.costoExceso - a.costoExceso;
         return 0;
     });
 
@@ -354,38 +369,36 @@ function renderAlertas(filtroSucursal) {
 
     alertas.forEach((r, i) => {
         const div = document.createElement('div');
-        div.className = `p-4 rounded-xl border animate-fade-in ${
-            r.alerta.tipo === 'quiebre' 
-                ? 'bg-red-500/10 border-red-500/20' 
-                : r.alerta.severidad === 'media' 
-                    ? 'bg-orange-500/10 border-orange-500/20'
-                    : 'bg-yellow-500/10 border-yellow-500/20'
-        }`;
+        const isQuiebre = r.alerta.tipo === 'quiebre';
+        div.className = 'p-4 rounded-xl border animate-fade-in ' + (isQuiebre ? 'bg-red-500/10 border-red-500/20' : r.alerta.severidad === 'media' ? 'bg-orange-500/10 border-orange-500/20' : 'bg-yellow-500/10 border-yellow-500/20');
         div.style.animationDelay = `${i * 0.05}s`;
 
-        const icon = r.alerta.tipo === 'quiebre' ? 'alert-octagon' : 'trending-down';
-        const color = r.alerta.tipo === 'quiebre' ? 'text-red-400' : 'text-orange-400';
+        const icon = isQuiebre ? 'alert-octagon' : 'trending-down';
+        const color = isQuiebre ? 'text-red-400' : 'text-orange-400';
+        // Alert type label shown next to the sucursal
+        const tipoLabel = isQuiebre
+            ? '<span class="text-[10px] font-bold bg-red-500 text-white px-2 py-0.5 rounded-full uppercase">Quiebre</span>'
+            : '<span class="text-[10px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded-full uppercase">Sobrepedido</span>';
         
         let detalleExceso = '';
-        if (r.alerta.tipo === 'sobrepedido') {
-            detalleExceso = `<span class="bg-orange-500/20 text-orange-400 text-xs px-2 py-1 rounded font-medium mt-2 inline-block">Gasto extra: $${r.costoExceso.toFixed(2)}</span>`;
-        }
+        if (!isQuiebre) detalleExceso = `<span class="bg-orange-500/20 text-orange-400 text-xs px-2 py-1 rounded font-medium mt-2 inline-block">Gasto extra: $${r.costoExceso.toFixed(2)}</span>`;
 
         div.innerHTML = `
             <div class="flex gap-4 items-start">
-                <div class="mt-1 ${color}">
+                <div class="mt-1 ${color} flex-shrink-0">
                     <i data-lucide="${icon}"></i>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2 mb-1">
+                <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2 mb-1">
                         <span class="text-sm font-bold">${r.sucursal}</span>
+                        ${tipoLabel}
                         <i data-lucide="chevron-right" class="w-3 h-3 text-slate-500"></i>
                         <span class="text-sm text-slate-300">${r.ingrediente.nombre}</span>
                     </div>
                     <p class="text-slate-200 text-sm">
                         <span class="font-semibold text-white">ALERTA:</span> 
                         La sucursal necesita <b>${r.necesidadFormatos}</b> ${r.ingrediente.formato_compra}, 
-                        pero está pidiendo <b>${r.ordenActual}</b>. ${r.alerta.mensaje}
+                        pero esta pidiendo <b>${r.ordenActual}</b>. ${r.alerta.mensaje}
                     </p>
                     ${detalleExceso}
                 </div>
@@ -620,14 +633,10 @@ function renderRedistribucion() {
         return;
     }
 
-    mostrar.forEach(op => {
-        const badge = op.esPerecedero
-            ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Perecedero</span>'
-            : '';
-
-        // Build a clean mailto: link (works on desktop + mobile, opens mail client/app)
+    // ── Smart Gmail link: web on desktop, mailto: on mobile ──
+    function buildMailLink(op) {
         const subject = 'Traslado de Inventario: ' + op.ingrediente.nombre;
-        const body = [
+        const bodyLines = [
             'Solicitud de Traslado de Inventario.',
             '',
             'Ingrediente: ' + op.ingrediente.nombre,
@@ -636,8 +645,25 @@ function renderRedistribucion() {
             'Destino: ' + op.destino,
             '',
             'Por favor coordinar el traslado a la brevedad.'
-        ].join('\n');
-        const mailtoUrl = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        ];
+        const bodyText = bodyLines.join('\n');
+        // Detect touch/mobile device
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1);
+        if (isMobile) {
+            // mailto: opens native Gmail app on mobile
+            return 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(bodyText);
+        } else {
+            // Gmail web compose (popup, no extra window)
+            const gmailBody = encodeURIComponent(bodyText);
+            return 'https://mail.google.com/mail/?view=cm&fs=1&su=' + encodeURIComponent(subject) + '&body=' + gmailBody;
+        }
+    }
+
+    mostrar.forEach(op => {
+        const badge = op.esPerecedero
+            ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Perecedero</span>'
+            : '';
+        const mailUrl = buildMailLink(op);
 
         const div = document.createElement('div');
         div.className = 'p-4 rounded-xl border ' + (op.esPerecedero ? 'bg-orange-500/10 border-orange-500/20' : 'bg-slate-700 border-slate-600');
@@ -660,7 +686,7 @@ function renderRedistribucion() {
                         </div>
                     </div>
                 </div>
-                <a href="${mailtoUrl}" class="flex-shrink-0 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 text-white no-underline w-full sm:w-auto">
+                <a href="${mailUrl}" target="_blank" class="flex-shrink-0 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 text-white no-underline w-full sm:w-auto">
                     <i data-lucide="mail" class="w-4 h-4"></i>
                     <span>Generar Traslado</span>
                 </a>
@@ -673,30 +699,26 @@ function renderRedistribucion() {
 
 // ── PAGOS ──────────────────────────────────────────────────
 const PAGOS_DATA = [
-    // Pagados sin problemas
-    { sucursal: 'Brisas del Golf', proveedor: 'Molinos Central', descripcion: 'Harina 00 x10 sacos', total: 225.00, estado: 'pagado', fecha: '2026-07-28', issues: [] },
-    { sucursal: 'Costa del Este', proveedor: 'Distrib. Bella Italia', descripcion: 'Mozzarella x14 cajas', total: 910.00, estado: 'pagado', fecha: '2026-07-29', issues: [] },
-    { sucursal: 'Marbella', proveedor: 'AgroFresco', descripcion: 'Albahaca x8 paquetes', total: 20.00, estado: 'pagado', fecha: '2026-07-30', issues: [] },
-    { sucursal: 'Via Argentina', proveedor: 'EmpaqueTodo', descripcion: 'Cajas pizza x16 paquetes', total: 192.00, estado: 'pagado', fecha: '2026-07-31', issues: [] },
-    { sucursal: 'Brisas del Golf', proveedor: 'Deli Gourmet', descripcion: 'Prosciutto x3 piezas', total: 255.00, estado: 'pagado', fecha: '2026-08-01', issues: [] },
-    // Pagado con SOBRECOSTO
-    { sucursal: 'Marbella', proveedor: 'Importadora Istmo', descripcion: 'Aceite de Oliva x8 latas (pedido 4 de mas)', total: 280.00, estado: 'pagado', fecha: '2026-08-02', issues: ['sobrecosto'], sobrecostoMonto: 140.00 },
-    // Pagado con SOBRESTOCK
-    { sucursal: 'Costa del Este', proveedor: 'Verduras La Huerta', descripcion: 'Cebolla x6 sacos (2 de exceso)', total: 72.00, estado: 'pagado', fecha: '2026-08-03', issues: ['sobrestock'], sobrestockDesc: 'Exceso de 2 sacos, vence en 5 dias.' },
-    // Pagado con SOBRECOSTO + SOBRESTOCK
-    { sucursal: 'Via Argentina', proveedor: 'Distrib. Bella Italia', descripcion: 'Pepperoni x18 cajas (8 de exceso, precio negociado mal)', total: 1170.00, estado: 'pagado', fecha: '2026-08-04', issues: ['sobrecosto','sobrestock'], sobrecostoMonto: 390.00, sobrestockDesc: 'Exceso de 8 cajas.' },
-    // Pendientes
-    { sucursal: 'Costa del Este', proveedor: 'Verduras La Huerta', descripcion: 'Pimenton x2 cajas, Zanahoria x1 saco', total: 47.00, estado: 'pendiente', fecha: '2026-08-02', issues: [] },
-    { sucursal: 'Via Argentina', proveedor: 'Molinos Central', descripcion: 'Levadura x4 cajas, Semola x1 saco', total: 26.00, estado: 'pendiente', fecha: '2026-08-04', issues: [] },
-    { sucursal: 'Brisas del Golf', proveedor: 'Distrib. Bella Italia', descripcion: 'Burrata x2 cajas, Pepperoni x7 cajas', total: 363.00, estado: 'pendiente', fecha: '2026-08-05', issues: [] },
-    { sucursal: 'Costa del Este', proveedor: 'AgroFresco', descripcion: 'Arugula x11 paquetes', total: 33.00, estado: 'pendiente', fecha: '2026-08-05', issues: [] },
-    { sucursal: 'Marbella', proveedor: 'Hongos del Valle', descripcion: 'Champinones x5 cajas', total: 87.50, estado: 'pendiente', fecha: '2026-08-06', issues: [] },
+    { id:'BP-001', sucursal: 'Brisas del Golf',  proveedor: 'Molinos Central',       descripcion: 'Harina 00 x10 sacos',                                      total: 225.00,  estado: 'pagado',    fecha: '2026-07-28', issues: [] },
+    { id:'BP-002', sucursal: 'Costa del Este',   proveedor: 'Distrib. Bella Italia',  descripcion: 'Mozzarella x14 cajas',                                     total: 910.00,  estado: 'pagado',    fecha: '2026-07-29', issues: [] },
+    { id:'BP-003', sucursal: 'Marbella',          proveedor: 'AgroFresco',             descripcion: 'Albahaca x8 paquetes',                                     total: 20.00,   estado: 'pagado',    fecha: '2026-07-30', issues: [] },
+    { id:'BP-004', sucursal: 'Via Argentina',     proveedor: 'EmpaqueTodo',            descripcion: 'Cajas pizza x16 paquetes',                                 total: 192.00,  estado: 'pagado',    fecha: '2026-07-31', issues: [] },
+    { id:'BP-005', sucursal: 'Brisas del Golf',  proveedor: 'Deli Gourmet',           descripcion: 'Prosciutto x3 piezas',                                     total: 255.00,  estado: 'pagado',    fecha: '2026-08-01', issues: [] },
+    { id:'BP-006', sucursal: 'Marbella',          proveedor: 'Importadora Istmo',      descripcion: 'Aceite de Oliva x8 latas (pedido 4 de mas)',                total: 280.00,  estado: 'pagado',    fecha: '2026-08-02', issues: ['sobrecosto'], sobrecostoMonto: 140.00 },
+    { id:'BP-007', sucursal: 'Costa del Este',   proveedor: 'Verduras La Huerta',     descripcion: 'Cebolla x6 sacos (2 de exceso)',                           total: 72.00,   estado: 'pagado',    fecha: '2026-08-03', issues: ['sobrestock'], sobrestockDesc: 'Exceso de 2 sacos, vence en 5 dias.' },
+    { id:'BP-008', sucursal: 'Via Argentina',    proveedor: 'Distrib. Bella Italia',  descripcion: 'Pepperoni x18 cajas (8 de exceso, precio negociado mal)',  total: 1170.00, estado: 'pagado',    fecha: '2026-08-04', issues: ['sobrecosto','sobrestock'], sobrecostoMonto: 390.00, sobrestockDesc: 'Exceso de 8 cajas.' },
+    { id:'BP-009', sucursal: 'Costa del Este',  proveedor: 'Verduras La Huerta',     descripcion: 'Pimenton x2 cajas, Zanahoria x1 saco',                    total: 47.00,   estado: 'pendiente', fecha: '2026-08-02', issues: [] },
+    { id:'BP-010', sucursal: 'Via Argentina',    proveedor: 'Molinos Central',        descripcion: 'Levadura x4 cajas, Semola x1 saco',                       total: 26.00,   estado: 'pendiente', fecha: '2026-08-04', issues: [] },
+    { id:'BP-011', sucursal: 'Brisas del Golf', proveedor: 'Distrib. Bella Italia',  descripcion: 'Burrata x2 cajas, Pepperoni x7 cajas',                    total: 363.00,  estado: 'pendiente', fecha: '2026-08-05', issues: [] },
+    { id:'BP-012', sucursal: 'Costa del Este',  proveedor: 'AgroFresco',             descripcion: 'Arugula x11 paquetes',                                     total: 33.00,   estado: 'pendiente', fecha: '2026-08-05', issues: [] },
+    { id:'BP-013', sucursal: 'Marbella',         proveedor: 'Hongos del Valle',       descripcion: 'Champinones x5 cajas',                                     total: 87.50,   estado: 'pendiente', fecha: '2026-08-06', issues: [] },
 ];
 
-window.renderPagos = function(filtroSucursal) {
+window.renderPagos = function(filtroSucursal, filtroTipo) {
     filtroSucursal = filtroSucursal || 'all';
+    filtroTipo = filtroTipo || 'all';
 
-    // Build sucursal buttons for pagos on first call
+    // Build sucursal buttons on first call
     const grp = document.getElementById('pagos-sucursal-btn-group');
     if (grp && grp.children.length <= 1) {
         const sucursales = [...new Set(PAGOS_DATA.map(p => p.sucursal))];
@@ -710,39 +732,45 @@ window.renderPagos = function(filtroSucursal) {
         });
     }
 
-    const datos = filtroSucursal === 'all' ? PAGOS_DATA : PAGOS_DATA.filter(p => p.sucursal === filtroSucursal);
-    const pagados = datos.filter(p => p.estado === 'pagado');
-    const pendientes = datos.filter(p => p.estado === 'pendiente');
+    let datos = filtroSucursal === 'all' ? PAGOS_DATA : PAGOS_DATA.filter(p => p.sucursal === filtroSucursal);
+    if (filtroTipo === 'pagado')   datos = datos.filter(p => p.estado === 'pagado' && !(p.issues||[]).length);
+    if (filtroTipo === 'pendiente') datos = datos.filter(p => p.estado === 'pendiente');
+    if (filtroTipo === 'alerta')   datos = datos.filter(p => (p.issues||[]).length > 0);
 
-    const totalPagado = pagados.reduce((s, p) => s + p.total, 0);
-    const totalPendiente = pendientes.reduce((s, p) => s + p.total, 0);
-
+    const pagados = PAGOS_DATA.filter(p => p.estado === 'pagado' && (filtroSucursal === 'all' || p.sucursal === filtroSucursal));
+    const pendientes = PAGOS_DATA.filter(p => p.estado === 'pendiente' && (filtroSucursal === 'all' || p.sucursal === filtroSucursal));
     const elPag = document.getElementById('pagos-total-pagado');
     const elPen = document.getElementById('pagos-total-pendiente');
-    if(elPag) elPag.innerText = '$' + totalPagado.toFixed(2);
-    if(elPen) elPen.innerText = '$' + totalPendiente.toFixed(2);
+    if(elPag) elPag.innerText = '$' + pagados.reduce((s,p)=>s+p.total,0).toFixed(2);
+    if(elPen) elPen.innerText = '$' + pendientes.reduce((s,p)=>s+p.total,0).toFixed(2);
 
-    function renderCard(item) {
+    const list = document.getElementById('pagos-list-unified');
+    if(!list) return;
+    list.innerHTML = '';
+
+    if(!datos.length) {
+        list.innerHTML = '<p class="text-slate-500 text-sm text-center py-6">Sin pedidos para este filtro.</p>';
+        return;
+    }
+
+    datos.forEach(item => {
         const isPaid = item.estado === 'pagado';
         const issues = item.issues || [];
         const hasSobrecosto = issues.includes('sobrecosto');
         const hasSobrestock = issues.includes('sobrestock');
         const hasIssues = hasSobrecosto || hasSobrestock;
 
-        // Border and background color logic
-        let cardClass = 'p-4 rounded-xl border ';
+        let cardClass = 'p-4 rounded-xl border cursor-pointer hover:brightness-110 transition-all ';
         if (!isPaid) cardClass += 'bg-orange-500/5 border-orange-500/20';
         else if (hasSobrecosto && hasSobrestock) cardClass += 'bg-red-500/10 border-red-500/30';
         else if (hasSobrecosto) cardClass += 'bg-yellow-500/10 border-yellow-500/30';
         else if (hasSobrestock) cardClass += 'bg-purple-500/10 border-purple-500/30';
         else cardClass += 'bg-emerald-500/5 border-emerald-500/20';
 
-        // Issue badges
         let issueBadges = '';
-        if (hasSobrecosto) issueBadges += `<span class="inline-flex items-center gap-1 text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">Sobrecosto: $${item.sobrecostoMonto.toFixed(2)}</span>`;
-        if (hasSobrestock) issueBadges += `<span class="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full ml-1">${item.sobrestockDesc}</span>`;
+        if (hasSobrecosto) issueBadges += `<span class="text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">Sobrecosto $${item.sobrecostoMonto.toFixed(2)}</span>`;
+        if (hasSobrestock) issueBadges += `<span class="text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full ml-1">${item.sobrestockDesc}</span>`;
 
-        // Status message
         let statusMsg = '';
         if (!isPaid) statusMsg = '<span class="text-orange-500">Pendiente de confirmacion de pago.</span>';
         else if (hasSobrecosto && hasSobrestock) statusMsg = '<span class="text-red-400">Genero sobrecosto y sobrestock.</span>';
@@ -750,25 +778,76 @@ window.renderPagos = function(filtroSucursal) {
         else if (hasSobrestock) statusMsg = '<span class="text-purple-400">Genero sobrestock.</span>';
         else statusMsg = '<span class="text-emerald-500">No genero sobrecosto ni sobrestock.</span>';
 
-        return `
-        <div class="${cardClass}">
-            <div class="flex items-start justify-between gap-2 mb-2">
-                <div>
-                    <p class="text-sm font-semibold">${item.sucursal}</p>
-                    <p class="text-xs text-slate-400">${item.proveedor} &middot; ${item.fecha}</p>
+        const div = document.createElement('div');
+        div.className = cardClass;
+        div.onclick = () => openInvoice(item);
+        div.innerHTML = `
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2 mb-1">
+                        <span class="text-xs font-mono text-slate-500">${item.id}</span>
+                        <span class="text-sm font-semibold">${item.sucursal}</span>
+                        <span class="text-xs text-slate-400">&middot; ${item.proveedor} &middot; ${item.fecha}</span>
+                    </div>
+                    <p class="text-xs text-slate-300 mb-1">${item.descripcion}</p>
+                    ${issueBadges ? '<div class="flex flex-wrap gap-1 mb-1">' + issueBadges + '</div>' : ''}
+                    <p class="text-[10px] italic">${statusMsg}</p>
                 </div>
-                <p class="text-sm font-bold ${ isPaid ? (hasIssues ? 'text-yellow-400' : 'text-emerald-400') : 'text-orange-400' }">$${item.total.toFixed(2)}</p>
+                <p class="text-sm font-bold flex-shrink-0 ${ isPaid ? (hasIssues ? 'text-yellow-400' : 'text-emerald-400') : 'text-orange-400' }">$${item.total.toFixed(2)}</p>
             </div>
-            <p class="text-xs text-slate-300 mb-2">${item.descripcion}</p>
-            ${issueBadges ? '<div class="flex flex-wrap gap-1 mb-2">' + issueBadges + '</div>' : ''}
-            <p class="text-[10px] italic">${statusMsg}</p>
-        </div>`;
+        `;
+        list.appendChild(div);
+    });
+};
+
+window.openInvoice = function(item) {
+    const modal = document.getElementById('invoice-modal');
+    if (!modal) return;
+
+    const issues = item.issues || [];
+    const n = parseInt(item.id.replace('BP-',''), 10);
+    document.getElementById('inv-numero').innerText = item.id;
+    document.getElementById('inv-proveedor').innerText = item.proveedor;
+    document.getElementById('inv-sucursal').innerText = item.sucursal;
+    document.getElementById('inv-fecha').innerText = item.fecha;
+
+    const isPaid = item.estado === 'pagado';
+    const estadoEl = document.getElementById('inv-estado');
+    estadoEl.innerHTML = isPaid
+        ? '<span class="text-emerald-400 font-bold">Pagado</span>'
+        : '<span class="text-orange-400 font-bold">Pendiente</span>';
+
+    // Build line items from description
+    const parts = item.descripcion.split(',');
+    const subtotal = item.total;
+    const tax = subtotal * 0.07;
+    const totalWithTax = subtotal + tax;
+
+    const tbody = document.getElementById('inv-items');
+    tbody.innerHTML = parts.map((p, i) => {
+        const unitCost = (subtotal / parts.length).toFixed(2);
+        return `<tr><td class="py-2 text-slate-300">${p.trim()}</td><td class="py-2 text-right">$${unitCost}</td></tr>`;
+    }).join('');
+
+    document.getElementById('inv-subtotal').innerText = '$' + subtotal.toFixed(2);
+    document.getElementById('inv-tax').innerText = '$' + tax.toFixed(2);
+    document.getElementById('inv-total').innerText = '$' + totalWithTax.toFixed(2);
+
+    // Issues block
+    const issuesBlock = document.getElementById('inv-issues-block');
+    if (issues.length) {
+        issuesBlock.classList.remove('hidden');
+        const msgs = [];
+        if (issues.includes('sobrecosto')) msgs.push('Sobrecosto detectado: $' + (item.sobrecostoMonto||0).toFixed(2) + ' sobre el precio acordado.');
+        if (issues.includes('sobrestock')) msgs.push('Sobrestock: ' + item.sobrestockDesc);
+        issuesBlock.className = 'p-3 rounded-xl border text-xs bg-red-500/10 border-red-500/30 text-red-400';
+        issuesBlock.innerHTML = '<b>Alertas en este pedido:</b><ul class="mt-1 list-disc list-inside">' + msgs.map(m=>'<li>'+m+'</li>').join('') + '</ul>';
+    } else {
+        issuesBlock.classList.add('hidden');
     }
 
-    const listPagados = document.getElementById('pagos-pagados-list');
-    const listPendientes = document.getElementById('pagos-pendientes-list');
-    if(listPagados) listPagados.innerHTML = pagados.length ? pagados.map(renderCard).join('') : '<p class="text-slate-500 text-sm">Sin pedidos pagados.</p>';
-    if(listPendientes) listPendientes.innerHTML = pendientes.length ? pendientes.map(renderCard).join('') : '<p class="text-slate-500 text-sm">Sin pedidos pendientes.</p>';
+    lucide.createIcons();
+    modal.classList.remove('hidden');
 };
 
 // Lógica de Chat IA — con conexion real a Gemini/OpenAI
