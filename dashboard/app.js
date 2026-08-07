@@ -227,16 +227,52 @@ function renderizarUI() {
 }
 
 function renderKPIs() {
-    const totalQuiebres = resultados.filter(r => r.alerta?.tipo === 'quiebre').length;
-    const costoTotalExceso = resultados.reduce((sum, r) => sum + r.costoExceso, 0);
-    
-    // Oportunidades de redistribución: Ingredientes con sobrestock en una sucursal y necesidad en otra
-    let redistribucionCount = calcularOportunidadesRedistribucion().length;
+    const quiebres = resultados.filter(r => r.alerta && r.alerta.tipo === 'quiebre');
+    const sobrecostos = resultados.filter(r => r.costoExceso > 0);
+    const totalSobrecosto = resultados.reduce((s, r) => s + r.costoExceso, 0);
+    const redistOps = calcularOportunidadesRedistribucion();
 
-    document.getElementById('kpi-quiebres').innerText = totalQuiebres;
-    document.getElementById('kpi-sobrecosto').innerText = `$${costoTotalExceso.toFixed(2)}`;
-    document.getElementById('kpi-redistribucion').innerText = redistribucionCount;
-    document.getElementById('kpi-total-ordenes').innerText = resultados.length;
+    const kpiQ = document.getElementById('kpi-quiebres');
+    const kpiS = document.getElementById('kpi-sobrecosto');
+    const kpiR = document.getElementById('kpi-redistribucion');
+    const kpiO = document.getElementById('kpi-total-ordenes');
+
+    if(kpiQ) kpiQ.innerText = quiebres.length;
+    if(kpiS) kpiS.innerText = '$' + totalSobrecosto.toFixed(0);
+    if(kpiR) kpiR.innerText = redistOps.length;
+    if(kpiO) kpiO.innerText = resultados.length;
+
+    // Wire clickable KPI cards
+    const cardQ = document.getElementById('kpi-card-quiebres');
+    if(cardQ) {
+        const sucQ = [...new Set(quiebres.map(r => r.sucursal))];
+        const panelQ = document.getElementById('kpi-sucursales-quiebres');
+        cardQ.onclick = () => {
+            if(panelQ) {
+                panelQ.classList.toggle('hidden');
+                panelQ.innerHTML = sucQ.length ? 'Sucursales: ' + sucQ.join(', ') : 'Sin alertas de quiebre.';
+            }
+            if(sucQ.length) setSucursal(sucQ[0]);
+        };
+    }
+    const cardS = document.getElementById('kpi-card-sobrecosto');
+    if(cardS) {
+        const sucS = [...new Set(sobrecostos.map(r => r.sucursal))];
+        const panelS = document.getElementById('kpi-sucursales-sobrecosto');
+        cardS.onclick = () => {
+            if(panelS) {
+                panelS.classList.toggle('hidden');
+                panelS.innerHTML = sucS.length ? 'Sucursales: ' + sucS.join(', ') : 'Sin sobrecostos.';
+            }
+        };
+    }
+    const cardR = document.getElementById('kpi-card-redistribucion');
+    if(cardR) {
+        cardR.onclick = () => switchTab('redistribucion');
+    }
+
+    const loadEl = document.getElementById('loading-indicator');
+    if (loadEl) loadEl.classList.add('hidden');
 }
 
 function renderFiltroSucursales() {
@@ -435,20 +471,19 @@ function renderPorProveedor(filtroProveedor) {
     const container = document.getElementById('proveedores-container');
     container.innerHTML = '';
 
-    // Provider logos map (using colored initials as fallback)
-    const PROV_COLORS = {
-        'Molinos Central': '#f97316',
-        'Distrib. Bella Italia': '#3b82f6',
-        'Importadora Istmo': '#8b5cf6',
-        'AgroFresco': '#22c55e',
-        'Hongos del Valle': '#a16207',
-        'Verduras La Huerta': '#16a34a',
-        'Deli Gourmet': '#ec4899',
-        'EmpaqueTodo': '#64748b'
+    // Provider brand colors & logo URLs (via UI Avatars service for consistent look)
+    const PROV_META = {
+        'Molinos Central':       { color: '#f97316', logo: 'https://ui-avatars.com/api/?name=Molinos+Central&background=f97316&color=fff&size=80&bold=true&rounded=true' },
+        'Distrib. Bella Italia': { color: '#3b82f6', logo: 'https://ui-avatars.com/api/?name=Bella+Italia&background=3b82f6&color=fff&size=80&bold=true&rounded=true' },
+        'Importadora Istmo':     { color: '#8b5cf6', logo: 'https://ui-avatars.com/api/?name=Istmo&background=8b5cf6&color=fff&size=80&bold=true&rounded=true' },
+        'AgroFresco':            { color: '#22c55e', logo: 'https://ui-avatars.com/api/?name=AgroFresco&background=22c55e&color=fff&size=80&bold=true&rounded=true' },
+        'Hongos del Valle':      { color: '#a16207', logo: 'https://ui-avatars.com/api/?name=Hongos+Valle&background=a16207&color=fff&size=80&bold=true&rounded=true' },
+        'Verduras La Huerta':    { color: '#16a34a', logo: 'https://ui-avatars.com/api/?name=La+Huerta&background=16a34a&color=fff&size=80&bold=true&rounded=true' },
+        'Deli Gourmet':          { color: '#ec4899', logo: 'https://ui-avatars.com/api/?name=Deli+Gourmet&background=ec4899&color=fff&size=80&bold=true&rounded=true' },
+        'EmpaqueTodo':           { color: '#64748b', logo: 'https://ui-avatars.com/api/?name=EmpaqueTodo&background=64748b&color=fff&size=80&bold=true&rounded=true' },
     };
 
     const porProveedor = {};
-    
     resultados.forEach(r => {
         if (r.ordenActual > 0) {
             const prov = r.ingrediente.proveedor;
@@ -459,7 +494,7 @@ function renderPorProveedor(filtroProveedor) {
         }
     });
 
-    // Build provider filter buttons if not yet built
+    // Build provider filter buttons on first render
     const grpProv = document.getElementById('proveedor-filter-group');
     if (grpProv && grpProv.children.length <= 1) {
         Object.keys(porProveedor).forEach(prov => {
@@ -468,52 +503,63 @@ function renderPorProveedor(filtroProveedor) {
             btn.id = safeId;
             btn.className = 'prov-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors';
             btn.textContent = prov;
-            btn.onclick = () => {
-                if(typeof setProveedorFilter === 'function') setProveedorFilter(prov);
-                else renderPorProveedor(prov);
-            };
+            btn.onclick = () => { if(typeof setProveedorFilter === 'function') setProveedorFilter(prov); else renderPorProveedor(prov); };
             grpProv.appendChild(btn);
         });
     }
 
     const proveedores = filtroProveedor === 'all' ? Object.keys(porProveedor) : [filtroProveedor];
+    const isSingle = proveedores.length === 1;
 
     proveedores.forEach(prov => {
         const data = porProveedor[prov];
         if (!data) return;
         const minimo = MINIMO_PROVEEDOR[prov] || 0;
-        const color = PROV_COLORS[prov] || '#64748b';
-        const initials = prov.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-        
+        const meta = PROV_META[prov] || { color: '#64748b', logo: `https://ui-avatars.com/api/?name=${encodeURIComponent(prov)}&background=64748b&color=fff&size=80&bold=true&rounded=true` };
+
         let envioAlert = '';
         if (minimo > 0 && data.totalCosto < minimo) {
             const faltante = minimo - data.totalCosto;
-            envioAlert = `<div class="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-2 items-center text-blue-400 text-xs font-medium"><i data-lucide="info" class="w-4 h-4"></i> Faltan $${faltante.toFixed(2)} para envio gratis (Minimo: $${minimo}).</div>`;
+            envioAlert = `<div class="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-2 items-center text-blue-400 text-xs font-medium"><i data-lucide="info" class="w-4 h-4 flex-shrink-0"></i> Faltan $${faltante.toFixed(2)} para envio gratis. Minimo: $${minimo}.</div>`;
         } else if (minimo > 0) {
-            envioAlert = `<div class="mt-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex gap-2 items-center text-emerald-400 text-xs font-medium"><i data-lucide="check" class="w-4 h-4"></i> Califica para envio gratis.</div>`;
+            envioAlert = `<div class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex gap-2 items-center text-emerald-400 text-xs font-medium"><i data-lucide="check" class="w-4 h-4 flex-shrink-0"></i> Califica para envio gratis.</div>`;
         }
 
         const div = document.createElement('div');
-        div.className = "bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-lg";
+        // When showing single provider, go full width and larger table
+        div.className = isSingle
+            ? 'bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-lg col-span-full'
+            : 'bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-lg';
+
         div.innerHTML = `
-            <div class="flex justify-between items-start mb-4 border-b border-slate-700 pb-3">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style="background:${color}">${initials}</div>
-                    <h4 class="font-bold" style="color:${color}">${prov}</h4>
+            <div class="flex items-center gap-4 mb-5 pb-4 border-b border-slate-700">
+                <img src="${meta.logo}" alt="${prov}" class="w-14 h-14 rounded-xl object-cover shadow-md flex-shrink-0" onerror="this.style.display='none'">
+                <div class="flex-1 min-w-0">
+                    <h4 class="text-lg font-bold" style="color:${meta.color}">${prov}</h4>
+                    <p class="text-sm text-slate-400">${data.items.length} productos en esta orden</p>
                 </div>
-                <div class="text-right">
-                    <p class="text-xs text-slate-400">Total Orden</p>
-                    <p class="text-lg font-bold">$${data.totalCosto.toFixed(2)}</p>
+                <div class="text-right flex-shrink-0">
+                    <p class="text-xs text-slate-400 mb-1">Total Orden</p>
+                    <p class="text-2xl font-bold">$${data.totalCosto.toFixed(2)}</p>
                 </div>
             </div>
-            <div class="max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                <table class="w-full text-xs">
+            <div class="${ isSingle ? '' : 'max-h-64' } overflow-y-auto custom-scrollbar">
+                <table class="w-full text-sm">
+                    <thead class="sticky top-0 bg-slate-800 z-10">
+                        <tr class="text-xs text-slate-400 uppercase">
+                            <th class="pb-2 text-left">Sucursal</th>
+                            <th class="pb-2 text-left">Ingrediente</th>
+                            <th class="pb-2 text-center">Cantidad</th>
+                            <th class="pb-2 text-right">Costo</th>
+                        </tr>
+                    </thead>
                     <tbody class="divide-y divide-slate-700">
                         ${data.items.map(i => `
-                            <tr>
-                                <td class="py-2 text-slate-300 font-medium">${i.cantidad}x ${i.formato}</td>
-                                <td class="py-2">${i.nombre} <span class="text-slate-500 ml-1">(${i.sucursal.split(' ')[0]})</span></td>
-                                <td class="py-2 text-right">$${i.costo.toFixed(2)}</td>
+                            <tr class="hover:bg-slate-700/30 transition-colors">
+                                <td class="py-2.5 text-slate-400 text-xs">${i.sucursal}</td>
+                                <td class="py-2.5 font-medium">${i.nombre}</td>
+                                <td class="py-2.5 text-center text-slate-300">${i.cantidad}x ${i.formato}</td>
+                                <td class="py-2.5 text-right font-semibold">$${i.costo.toFixed(2)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -523,6 +569,9 @@ function renderPorProveedor(filtroProveedor) {
         `;
         container.appendChild(div);
     });
+    // Make single provider card span full width via container
+    if (isSingle) container.classList.add('grid-cols-1');
+    else container.classList.remove('grid-cols-1');
     lucide.createIcons();
 }
 
@@ -572,34 +621,50 @@ function renderRedistribucion() {
     }
 
     mostrar.forEach(op => {
+        const badge = op.esPerecedero
+            ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Perecedero</span>'
+            : '';
+
+        // Build a clean mailto: link (works on desktop + mobile, opens mail client/app)
+        const subject = 'Traslado de Inventario: ' + op.ingrediente.nombre;
+        const body = [
+            'Solicitud de Traslado de Inventario.',
+            '',
+            'Ingrediente: ' + op.ingrediente.nombre,
+            'Cantidad: ' + op.cantidadBase.toFixed(1) + ' ' + op.ingrediente.unidad_base,
+            'Origen: ' + op.origen,
+            'Destino: ' + op.destino,
+            '',
+            'Por favor coordinar el traslado a la brevedad.'
+        ].join('\n');
+        const mailtoUrl = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+
         const div = document.createElement('div');
-        div.className = `p-4 rounded-xl border flex items-center justify-between ${
-            op.esPerecedero ? 'bg-orange-500/10 border-orange-500/20' : 'bg-slate-700 border-slate-600'
-        }`;
-        
-        const badge = op.esPerecedero ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold ml-2">Perecedero</span>' : '';
-
-        const gmailBody = encodeURIComponent(`Solicitud de Traslado de Inventario%0A%0AIngrediente: ${op.ingrediente.nombre}%0ACantidad: ${op.cantidadBase.toFixed(1)} ${op.ingrediente.unidad_base}%0AOrigen: ${op.origen}%0ADestino: ${op.destino}%0A%0APor favor coordinar el traslado a la brevedad posible.`);
-        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent('Traslado de Inventario: ' + op.ingrediente.nombre)}&body=${gmailBody}`;
-
+        div.className = 'p-4 rounded-xl border ' + (op.esPerecedero ? 'bg-orange-500/10 border-orange-500/20' : 'bg-slate-700 border-slate-600');
         div.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="flex flex-col items-center justify-center w-12 h-12 bg-slate-800 rounded-lg border border-slate-600">
-                    <span class="text-xs text-slate-400">${op.ingrediente.unidad_base}</span>
-                    <span class="font-bold">${op.cantidadBase.toFixed(1)}</span>
-                </div>
-                <div>
-                    <h4 class="font-bold flex items-center">${op.ingrediente.nombre} ${badge}</h4>
-                    <div class="flex items-center gap-2 mt-1 text-sm text-slate-300">
-                        <span class="text-red-400 bg-red-400/10 px-2 py-0.5 rounded">${op.origen}</span>
-                        <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
-                        <span class="text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">${op.destino}</span>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <div class="flex flex-col items-center justify-center w-12 h-12 flex-shrink-0 bg-slate-800 rounded-lg border border-slate-600">
+                        <span class="text-[10px] text-slate-400">${op.ingrediente.unidad_base}</span>
+                        <span class="font-bold text-sm">${op.cantidadBase.toFixed(1)}</span>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-1 mb-1">
+                            <h4 class="font-bold">${op.ingrediente.nombre}</h4>
+                            ${badge}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1 text-xs text-slate-300">
+                            <span class="text-red-400 bg-red-400/10 px-2 py-0.5 rounded">${op.origen}</span>
+                            <i data-lucide="arrow-right" class="w-3 h-3 text-slate-500 flex-shrink-0"></i>
+                            <span class="text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">${op.destino}</span>
+                        </div>
                     </div>
                 </div>
+                <a href="${mailtoUrl}" class="flex-shrink-0 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 text-white no-underline w-full sm:w-auto">
+                    <i data-lucide="mail" class="w-4 h-4"></i>
+                    <span>Generar Traslado</span>
+                </a>
             </div>
-            <a href="${gmailUrl}" target="_blank" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 no-underline text-white">
-                <i data-lucide="mail" class="w-4 h-4"></i> Generar Traslado
-            </a>
         `;
         container.appendChild(div);
     });
@@ -608,18 +673,24 @@ function renderRedistribucion() {
 
 // ── PAGOS ──────────────────────────────────────────────────
 const PAGOS_DATA = [
-    // Pagados
-    { sucursal: 'Brisas del Golf', proveedor: 'Molinos Central', descripcion: 'Harina 00 x10 sacos', total: 225.00, estado: 'pagado', fecha: '2026-07-28' },
-    { sucursal: 'Costa del Este', proveedor: 'Distrib. Bella Italia', descripcion: 'Mozzarella x14 cajas', total: 910.00, estado: 'pagado', fecha: '2026-07-29' },
-    { sucursal: 'Marbella', proveedor: 'AgroFresco', descripcion: 'Albahaca x8 paquetes', total: 20.00, estado: 'pagado', fecha: '2026-07-30' },
-    { sucursal: 'Via Argentina', proveedor: 'EmpaqueTodo', descripcion: 'Cajas pizza x16 paquetes', total: 192.00, estado: 'pagado', fecha: '2026-07-31' },
-    { sucursal: 'Brisas del Golf', proveedor: 'Deli Gourmet', descripcion: 'Prosciutto x3 piezas', total: 255.00, estado: 'pagado', fecha: '2026-08-01' },
+    // Pagados sin problemas
+    { sucursal: 'Brisas del Golf', proveedor: 'Molinos Central', descripcion: 'Harina 00 x10 sacos', total: 225.00, estado: 'pagado', fecha: '2026-07-28', issues: [] },
+    { sucursal: 'Costa del Este', proveedor: 'Distrib. Bella Italia', descripcion: 'Mozzarella x14 cajas', total: 910.00, estado: 'pagado', fecha: '2026-07-29', issues: [] },
+    { sucursal: 'Marbella', proveedor: 'AgroFresco', descripcion: 'Albahaca x8 paquetes', total: 20.00, estado: 'pagado', fecha: '2026-07-30', issues: [] },
+    { sucursal: 'Via Argentina', proveedor: 'EmpaqueTodo', descripcion: 'Cajas pizza x16 paquetes', total: 192.00, estado: 'pagado', fecha: '2026-07-31', issues: [] },
+    { sucursal: 'Brisas del Golf', proveedor: 'Deli Gourmet', descripcion: 'Prosciutto x3 piezas', total: 255.00, estado: 'pagado', fecha: '2026-08-01', issues: [] },
+    // Pagado con SOBRECOSTO
+    { sucursal: 'Marbella', proveedor: 'Importadora Istmo', descripcion: 'Aceite de Oliva x8 latas (pedido 4 de mas)', total: 280.00, estado: 'pagado', fecha: '2026-08-02', issues: ['sobrecosto'], sobrecostoMonto: 140.00 },
+    // Pagado con SOBRESTOCK
+    { sucursal: 'Costa del Este', proveedor: 'Verduras La Huerta', descripcion: 'Cebolla x6 sacos (2 de exceso)', total: 72.00, estado: 'pagado', fecha: '2026-08-03', issues: ['sobrestock'], sobrestockDesc: 'Exceso de 2 sacos, vence en 5 dias.' },
+    // Pagado con SOBRECOSTO + SOBRESTOCK
+    { sucursal: 'Via Argentina', proveedor: 'Distrib. Bella Italia', descripcion: 'Pepperoni x18 cajas (8 de exceso, precio negociado mal)', total: 1170.00, estado: 'pagado', fecha: '2026-08-04', issues: ['sobrecosto','sobrestock'], sobrecostoMonto: 390.00, sobrestockDesc: 'Exceso de 8 cajas.' },
     // Pendientes
-    { sucursal: 'Costa del Este', proveedor: 'Verduras La Huerta', descripcion: 'Cebolla x2 sacos, Pimenton x2 cajas', total: 47.00, estado: 'pendiente', fecha: '2026-08-02' },
-    { sucursal: 'Marbella', proveedor: 'Importadora Istmo', descripcion: 'Aceite de Oliva x4 latas', total: 140.00, estado: 'pendiente', fecha: '2026-08-03' },
-    { sucursal: 'Via Argentina', proveedor: 'Molinos Central', descripcion: 'Levadura x4 cajas, Semola x1 saco', total: 26.00, estado: 'pendiente', fecha: '2026-08-04' },
-    { sucursal: 'Brisas del Golf', proveedor: 'Distrib. Bella Italia', descripcion: 'Burrata x2 cajas, Pepperoni x7 cajas', total: 363.00, estado: 'pendiente', fecha: '2026-08-05' },
-    { sucursal: 'Costa del Este', proveedor: 'AgroFresco', descripcion: 'Arugula x11 paquetes', total: 33.00, estado: 'pendiente', fecha: '2026-08-05' },
+    { sucursal: 'Costa del Este', proveedor: 'Verduras La Huerta', descripcion: 'Pimenton x2 cajas, Zanahoria x1 saco', total: 47.00, estado: 'pendiente', fecha: '2026-08-02', issues: [] },
+    { sucursal: 'Via Argentina', proveedor: 'Molinos Central', descripcion: 'Levadura x4 cajas, Semola x1 saco', total: 26.00, estado: 'pendiente', fecha: '2026-08-04', issues: [] },
+    { sucursal: 'Brisas del Golf', proveedor: 'Distrib. Bella Italia', descripcion: 'Burrata x2 cajas, Pepperoni x7 cajas', total: 363.00, estado: 'pendiente', fecha: '2026-08-05', issues: [] },
+    { sucursal: 'Costa del Este', proveedor: 'AgroFresco', descripcion: 'Arugula x11 paquetes', total: 33.00, estado: 'pendiente', fecha: '2026-08-05', issues: [] },
+    { sucursal: 'Marbella', proveedor: 'Hongos del Valle', descripcion: 'Champinones x5 cajas', total: 87.50, estado: 'pendiente', fecha: '2026-08-06', issues: [] },
 ];
 
 window.renderPagos = function(filtroSucursal) {
@@ -653,19 +724,44 @@ window.renderPagos = function(filtroSucursal) {
 
     function renderCard(item) {
         const isPaid = item.estado === 'pagado';
+        const issues = item.issues || [];
+        const hasSobrecosto = issues.includes('sobrecosto');
+        const hasSobrestock = issues.includes('sobrestock');
+        const hasIssues = hasSobrecosto || hasSobrestock;
+
+        // Border and background color logic
+        let cardClass = 'p-4 rounded-xl border ';
+        if (!isPaid) cardClass += 'bg-orange-500/5 border-orange-500/20';
+        else if (hasSobrecosto && hasSobrestock) cardClass += 'bg-red-500/10 border-red-500/30';
+        else if (hasSobrecosto) cardClass += 'bg-yellow-500/10 border-yellow-500/30';
+        else if (hasSobrestock) cardClass += 'bg-purple-500/10 border-purple-500/30';
+        else cardClass += 'bg-emerald-500/5 border-emerald-500/20';
+
+        // Issue badges
+        let issueBadges = '';
+        if (hasSobrecosto) issueBadges += `<span class="inline-flex items-center gap-1 text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">Sobrecosto: $${item.sobrecostoMonto.toFixed(2)}</span>`;
+        if (hasSobrestock) issueBadges += `<span class="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full ml-1">${item.sobrestockDesc}</span>`;
+
+        // Status message
+        let statusMsg = '';
+        if (!isPaid) statusMsg = '<span class="text-orange-500">Pendiente de confirmacion de pago.</span>';
+        else if (hasSobrecosto && hasSobrestock) statusMsg = '<span class="text-red-400">Genero sobrecosto y sobrestock.</span>';
+        else if (hasSobrecosto) statusMsg = '<span class="text-yellow-400">Genero sobrecosto.</span>';
+        else if (hasSobrestock) statusMsg = '<span class="text-purple-400">Genero sobrestock.</span>';
+        else statusMsg = '<span class="text-emerald-500">No genero sobrecosto ni sobrestock.</span>';
+
         return `
-        <div class="p-4 rounded-xl border ${ isPaid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-orange-500/5 border-orange-500/20' }">
+        <div class="${cardClass}">
             <div class="flex items-start justify-between gap-2 mb-2">
                 <div>
                     <p class="text-sm font-semibold">${item.sucursal}</p>
-                    <p class="text-xs text-slate-400">${item.proveedor} · ${item.fecha}</p>
+                    <p class="text-xs text-slate-400">${item.proveedor} &middot; ${item.fecha}</p>
                 </div>
-                <p class="text-sm font-bold ${ isPaid ? 'text-emerald-400' : 'text-orange-400' }">$${item.total.toFixed(2)}</p>
+                <p class="text-sm font-bold ${ isPaid ? (hasIssues ? 'text-yellow-400' : 'text-emerald-400') : 'text-orange-400' }">$${item.total.toFixed(2)}</p>
             </div>
             <p class="text-xs text-slate-300 mb-2">${item.descripcion}</p>
-            <p class="text-[10px] italic ${ isPaid ? 'text-emerald-500' : 'text-orange-500' }">
-                ${ isPaid ? 'No genero sobrecosto ni sobrestock' : 'Pendiente de confirmacion de pago' }
-            </p>
+            ${issueBadges ? '<div class="flex flex-wrap gap-1 mb-2">' + issueBadges + '</div>' : ''}
+            <p class="text-[10px] italic">${statusMsg}</p>
         </div>`;
     }
 
