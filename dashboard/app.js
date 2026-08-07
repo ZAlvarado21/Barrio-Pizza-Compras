@@ -221,8 +221,9 @@ function renderizarUI() {
     renderAlertas(document.getElementById('filter-sucursal')?.value || 'all');
     if (typeof renderCrossAnomalias === 'function') renderCrossAnomalias();
     renderTablaOrdenes();
-    renderPorProveedor();
+    renderPorProveedor('all');
     renderRedistribucion();
+    renderPagos('all');
 }
 
 function renderKPIs() {
@@ -365,7 +366,9 @@ function renderTablaOrdenes(filtroSucursal) {
     const tbody = document.getElementById('table-ordenes-body');
     tbody.innerHTML = '';
 
-    const filas = filtroSucursal === 'all' ? resultados : resultados.filter(r => r.sucursal === filtroSucursal);
+    const searchTerm = (document.getElementById('ordenes-search')?.value || '').toLowerCase();
+    let filas = filtroSucursal === 'all' ? resultados : resultados.filter(r => r.sucursal === filtroSucursal);
+    if (searchTerm) filas = filas.filter(r => r.ingrediente.nombre.toLowerCase().includes(searchTerm));
 
     filas.forEach((r, idx) => {
         const tr = document.createElement('tr');
@@ -427,9 +430,22 @@ function actualizarOrden(idx, nuevaCantidad) {
     renderizarUI();
 }
 
-function renderPorProveedor() {
+function renderPorProveedor(filtroProveedor) {
+    filtroProveedor = filtroProveedor || 'all';
     const container = document.getElementById('proveedores-container');
     container.innerHTML = '';
+
+    // Provider logos map (using colored initials as fallback)
+    const PROV_COLORS = {
+        'Molinos Central': '#f97316',
+        'Distrib. Bella Italia': '#3b82f6',
+        'Importadora Istmo': '#8b5cf6',
+        'AgroFresco': '#22c55e',
+        'Hongos del Valle': '#a16207',
+        'Verduras La Huerta': '#16a34a',
+        'Deli Gourmet': '#ec4899',
+        'EmpaqueTodo': '#64748b'
+    };
 
     const porProveedor = {};
     
@@ -437,46 +453,54 @@ function renderPorProveedor() {
         if (r.ordenActual > 0) {
             const prov = r.ingrediente.proveedor;
             if (!porProveedor[prov]) porProveedor[prov] = { totalCosto: 0, items: [] };
-            
             const costoItem = r.ordenActual * (PRECIOS_SIMULADOS[r.ingrediente.ingrediente_id] || 0);
             porProveedor[prov].totalCosto += costoItem;
-            porProveedor[prov].items.push({
-                sucursal: r.sucursal,
-                nombre: r.ingrediente.nombre,
-                cantidad: r.ordenActual,
-                formato: r.ingrediente.formato_compra,
-                costo: costoItem
-            });
+            porProveedor[prov].items.push({ sucursal: r.sucursal, nombre: r.ingrediente.nombre, cantidad: r.ordenActual, formato: r.ingrediente.formato_compra, costo: costoItem });
         }
     });
 
-    Object.keys(porProveedor).forEach(prov => {
+    // Build provider filter buttons if not yet built
+    const grpProv = document.getElementById('proveedor-filter-group');
+    if (grpProv && grpProv.children.length <= 1) {
+        Object.keys(porProveedor).forEach(prov => {
+            const safeId = 'prov-' + prov.replace(/[\s.]/g, '_');
+            const btn = document.createElement('button');
+            btn.id = safeId;
+            btn.className = 'prov-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors';
+            btn.textContent = prov;
+            btn.onclick = () => {
+                if(typeof setProveedorFilter === 'function') setProveedorFilter(prov);
+                else renderPorProveedor(prov);
+            };
+            grpProv.appendChild(btn);
+        });
+    }
+
+    const proveedores = filtroProveedor === 'all' ? Object.keys(porProveedor) : [filtroProveedor];
+
+    proveedores.forEach(prov => {
         const data = porProveedor[prov];
+        if (!data) return;
         const minimo = MINIMO_PROVEEDOR[prov] || 0;
+        const color = PROV_COLORS[prov] || '#64748b';
+        const initials = prov.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
         
         let envioAlert = '';
         if (minimo > 0 && data.totalCosto < minimo) {
             const faltante = minimo - data.totalCosto;
-            envioAlert = `
-                <div class="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-2 items-center text-blue-400 text-xs font-medium">
-                    <i data-lucide="info" class="w-4 h-4"></i> Faltan $${faltante.toFixed(2)} para envío gratis (Mínimo: $${minimo}).
-                </div>
-            `;
+            envioAlert = `<div class="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-2 items-center text-blue-400 text-xs font-medium"><i data-lucide="info" class="w-4 h-4"></i> Faltan $${faltante.toFixed(2)} para envio gratis (Minimo: $${minimo}).</div>`;
         } else if (minimo > 0) {
-            envioAlert = `
-                <div class="mt-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex gap-2 items-center text-emerald-400 text-xs font-medium">
-                    <i data-lucide="check" class="w-4 h-4"></i> Califica para envío gratis.
-                </div>
-            `;
+            envioAlert = `<div class="mt-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex gap-2 items-center text-emerald-400 text-xs font-medium"><i data-lucide="check" class="w-4 h-4"></i> Califica para envio gratis.</div>`;
         }
 
         const div = document.createElement('div');
         div.className = "bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-lg";
         div.innerHTML = `
             <div class="flex justify-between items-start mb-4 border-b border-slate-700 pb-3">
-                <h4 class="font-bold text-orange-400 flex items-center gap-2">
-                    <i data-lucide="truck" class="w-5 h-5"></i> ${prov}
-                </h4>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style="background:${color}">${initials}</div>
+                    <h4 class="font-bold" style="color:${color}">${prov}</h4>
+                </div>
                 <div class="text-right">
                     <p class="text-xs text-slate-400">Total Orden</p>
                     <p class="text-lg font-bold">$${data.totalCosto.toFixed(2)}</p>
@@ -499,6 +523,7 @@ function renderPorProveedor() {
         `;
         container.appendChild(div);
     });
+    lucide.createIcons();
 }
 
 function calcularOportunidadesRedistribucion() {
@@ -534,11 +559,10 @@ function renderRedistribucion() {
     container.innerHTML = '';
     const oportunidades = calcularOportunidadesRedistribucion();
 
-    // Pad with illustrative examples if fewer than 3 real ones
     const ejemplos = [
-        { ingrediente: { nombre: 'Mozzarella', unidad_base: 'kg', es_perecedero: 'Si' }, origen: 'Brisas del Golf', destino: 'Via Argentina', cantidadBase: 15, esPerecedero: true, esEjemplo: true },
-        { ingrediente: { nombre: 'Pepperoni', unidad_base: 'kg', es_perecedero: 'Si' }, origen: 'Costa del Este', destino: 'Marbella', cantidadBase: 8, esPerecedero: true, esEjemplo: true },
-        { ingrediente: { nombre: 'Cebolla', unidad_base: 'kg', es_perecedero: 'No' }, origen: 'Marbella', destino: 'Costa del Este', cantidadBase: 20, esPerecedero: false, esEjemplo: true },
+        { ingrediente: { nombre: 'Mozzarella', unidad_base: 'kg', es_perecedero: 'Si' }, origen: 'Brisas del Golf', destino: 'Via Argentina', cantidadBase: 15, esPerecedero: true },
+        { ingrediente: { nombre: 'Pepperoni', unidad_base: 'kg', es_perecedero: 'Si' }, origen: 'Costa del Este', destino: 'Marbella', cantidadBase: 8, esPerecedero: true },
+        { ingrediente: { nombre: 'Cebolla', unidad_base: 'kg', es_perecedero: 'No' }, origen: 'Marbella', destino: 'Costa del Este', cantidadBase: 20, esPerecedero: false },
     ];
     const mostrar = oportunidades.length >= 2 ? oportunidades : [...oportunidades, ...ejemplos].slice(0, Math.max(3, oportunidades.length));
 
@@ -553,8 +577,10 @@ function renderRedistribucion() {
             op.esPerecedero ? 'bg-orange-500/10 border-orange-500/20' : 'bg-slate-700 border-slate-600'
         }`;
         
-        let badge = op.esPerecedero ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold ml-2">Perecedero</span>' : '';
-        let ejemploBadge = op.esEjemplo ? '<span class="ml-2 bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Ejemplo</span>' : '';
+        const badge = op.esPerecedero ? '<span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold ml-2">Perecedero</span>' : '';
+
+        const gmailBody = encodeURIComponent(`Solicitud de Traslado de Inventario%0A%0AIngrediente: ${op.ingrediente.nombre}%0ACantidad: ${op.cantidadBase.toFixed(1)} ${op.ingrediente.unidad_base}%0AOrigen: ${op.origen}%0ADestino: ${op.destino}%0A%0APor favor coordinar el traslado a la brevedad posible.`);
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent('Traslado de Inventario: ' + op.ingrediente.nombre)}&body=${gmailBody}`;
 
         div.innerHTML = `
             <div class="flex items-center gap-4">
@@ -563,7 +589,7 @@ function renderRedistribucion() {
                     <span class="font-bold">${op.cantidadBase.toFixed(1)}</span>
                 </div>
                 <div>
-                    <h4 class="font-bold flex items-center">${op.ingrediente.nombre} ${badge} ${ejemploBadge}</h4>
+                    <h4 class="font-bold flex items-center">${op.ingrediente.nombre} ${badge}</h4>
                     <div class="flex items-center gap-2 mt-1 text-sm text-slate-300">
                         <span class="text-red-400 bg-red-400/10 px-2 py-0.5 rounded">${op.origen}</span>
                         <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
@@ -571,12 +597,83 @@ function renderRedistribucion() {
                     </div>
                 </div>
             </div>
-            <button class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors">Generar Traslado</button>
+            <a href="${gmailUrl}" target="_blank" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 no-underline text-white">
+                <i data-lucide="mail" class="w-4 h-4"></i> Generar Traslado
+            </a>
         `;
         container.appendChild(div);
     });
     lucide.createIcons();
 }
+
+// ── PAGOS ──────────────────────────────────────────────────
+const PAGOS_DATA = [
+    // Pagados
+    { sucursal: 'Brisas del Golf', proveedor: 'Molinos Central', descripcion: 'Harina 00 x10 sacos', total: 225.00, estado: 'pagado', fecha: '2026-07-28' },
+    { sucursal: 'Costa del Este', proveedor: 'Distrib. Bella Italia', descripcion: 'Mozzarella x14 cajas', total: 910.00, estado: 'pagado', fecha: '2026-07-29' },
+    { sucursal: 'Marbella', proveedor: 'AgroFresco', descripcion: 'Albahaca x8 paquetes', total: 20.00, estado: 'pagado', fecha: '2026-07-30' },
+    { sucursal: 'Via Argentina', proveedor: 'EmpaqueTodo', descripcion: 'Cajas pizza x16 paquetes', total: 192.00, estado: 'pagado', fecha: '2026-07-31' },
+    { sucursal: 'Brisas del Golf', proveedor: 'Deli Gourmet', descripcion: 'Prosciutto x3 piezas', total: 255.00, estado: 'pagado', fecha: '2026-08-01' },
+    // Pendientes
+    { sucursal: 'Costa del Este', proveedor: 'Verduras La Huerta', descripcion: 'Cebolla x2 sacos, Pimenton x2 cajas', total: 47.00, estado: 'pendiente', fecha: '2026-08-02' },
+    { sucursal: 'Marbella', proveedor: 'Importadora Istmo', descripcion: 'Aceite de Oliva x4 latas', total: 140.00, estado: 'pendiente', fecha: '2026-08-03' },
+    { sucursal: 'Via Argentina', proveedor: 'Molinos Central', descripcion: 'Levadura x4 cajas, Semola x1 saco', total: 26.00, estado: 'pendiente', fecha: '2026-08-04' },
+    { sucursal: 'Brisas del Golf', proveedor: 'Distrib. Bella Italia', descripcion: 'Burrata x2 cajas, Pepperoni x7 cajas', total: 363.00, estado: 'pendiente', fecha: '2026-08-05' },
+    { sucursal: 'Costa del Este', proveedor: 'AgroFresco', descripcion: 'Arugula x11 paquetes', total: 33.00, estado: 'pendiente', fecha: '2026-08-05' },
+];
+
+window.renderPagos = function(filtroSucursal) {
+    filtroSucursal = filtroSucursal || 'all';
+
+    // Build sucursal buttons for pagos on first call
+    const grp = document.getElementById('pagos-sucursal-btn-group');
+    if (grp && grp.children.length <= 1) {
+        const sucursales = [...new Set(PAGOS_DATA.map(p => p.sucursal))];
+        sucursales.forEach(s => {
+            const btn = document.createElement('button');
+            btn.id = 'pag-suc-' + s.replace(/[\s]/g,'_');
+            btn.className = 'pag-suc-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors';
+            btn.textContent = s;
+            btn.onclick = () => { if(typeof setPagosSucursal === 'function') setPagosSucursal(s); else renderPagos(s); };
+            grp.appendChild(btn);
+        });
+    }
+
+    const datos = filtroSucursal === 'all' ? PAGOS_DATA : PAGOS_DATA.filter(p => p.sucursal === filtroSucursal);
+    const pagados = datos.filter(p => p.estado === 'pagado');
+    const pendientes = datos.filter(p => p.estado === 'pendiente');
+
+    const totalPagado = pagados.reduce((s, p) => s + p.total, 0);
+    const totalPendiente = pendientes.reduce((s, p) => s + p.total, 0);
+
+    const elPag = document.getElementById('pagos-total-pagado');
+    const elPen = document.getElementById('pagos-total-pendiente');
+    if(elPag) elPag.innerText = '$' + totalPagado.toFixed(2);
+    if(elPen) elPen.innerText = '$' + totalPendiente.toFixed(2);
+
+    function renderCard(item) {
+        const isPaid = item.estado === 'pagado';
+        return `
+        <div class="p-4 rounded-xl border ${ isPaid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-orange-500/5 border-orange-500/20' }">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div>
+                    <p class="text-sm font-semibold">${item.sucursal}</p>
+                    <p class="text-xs text-slate-400">${item.proveedor} · ${item.fecha}</p>
+                </div>
+                <p class="text-sm font-bold ${ isPaid ? 'text-emerald-400' : 'text-orange-400' }">$${item.total.toFixed(2)}</p>
+            </div>
+            <p class="text-xs text-slate-300 mb-2">${item.descripcion}</p>
+            <p class="text-[10px] italic ${ isPaid ? 'text-emerald-500' : 'text-orange-500' }">
+                ${ isPaid ? 'No genero sobrecosto ni sobrestock' : 'Pendiente de confirmacion de pago' }
+            </p>
+        </div>`;
+    }
+
+    const listPagados = document.getElementById('pagos-pagados-list');
+    const listPendientes = document.getElementById('pagos-pendientes-list');
+    if(listPagados) listPagados.innerHTML = pagados.length ? pagados.map(renderCard).join('') : '<p class="text-slate-500 text-sm">Sin pedidos pagados.</p>';
+    if(listPendientes) listPendientes.innerHTML = pendientes.length ? pendientes.map(renderCard).join('') : '<p class="text-slate-500 text-sm">Sin pedidos pendientes.</p>';
+};
 
 // Lógica de Chat IA — con conexion real a Gemini/OpenAI
 window.saveApiKey = function() {

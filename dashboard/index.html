@@ -53,47 +53,58 @@
     </div>
 
     <!-- MAIN APP -->
+    <!-- Mobile sidebar overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 hidden md:hidden" onclick="closeSidebar()"></div>
+
     <div id="app" class="flex h-screen overflow-hidden hidden">
         <!-- Sidebar -->
-        <aside class="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
-            <div class="p-6">
-                <h1 class="text-2xl font-bold text-orange-500 flex items-center gap-2">
-                    <i data-lucide="pizza"></i> Barrio Pizza
-                </h1>
-                <p class="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">Compras & Inventario</p>
+        <aside id="sidebar" class="w-64 bg-slate-800 border-r border-slate-700 flex flex-col fixed md:relative z-40 h-full -translate-x-full md:translate-x-0 transition-transform duration-300">
+            <div class="p-5 flex items-center justify-between">
+                <div>
+                    <h1 class="text-xl font-bold text-orange-500 flex items-center gap-2">
+                        <i data-lucide="pizza"></i> Barrio Pizza
+                    </h1>
+                    <p class="text-xs text-slate-400 mt-0.5 uppercase tracking-wider font-semibold">Compras & Inventario</p>
+                </div>
+                <button onclick="closeSidebar()" class="md:hidden text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
             
-            <nav class="flex-1 px-4 space-y-2">
+            <nav class="flex-1 px-4 space-y-1 overflow-y-auto">
                 <button onclick="switchTab('dashboard')" id="btn-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all bg-orange-500/10 text-orange-500 font-medium">
-                    <i data-lucide="layout-dashboard"></i> Tablero
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 flex-shrink-0"></i> Tablero
                 </button>
                 <button onclick="switchTab('ordenes')" id="btn-ordenes" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-slate-700 text-slate-300">
-                    <i data-lucide="shopping-cart"></i> Editar Ordenes
+                    <i data-lucide="shopping-cart" class="w-4 h-4 flex-shrink-0"></i> Editar Ordenes
                 </button>
                 <button onclick="switchTab('proveedores')" id="btn-proveedores" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-slate-700 text-slate-300">
-                    <i data-lucide="truck"></i> Por Proveedor
+                    <i data-lucide="truck" class="w-4 h-4 flex-shrink-0"></i> Por Proveedor
                 </button>
                 <button onclick="switchTab('redistribucion')" id="btn-redistribucion" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-slate-700 text-slate-300">
-                    <i data-lucide="arrow-left-right"></i> Redistribución
+                    <i data-lucide="arrow-left-right" class="w-4 h-4 flex-shrink-0"></i> Redistribucion
+                </button>
+                <button onclick="switchTab('pagos')" id="btn-pagos" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-slate-700 text-slate-300">
+                    <i data-lucide="receipt" class="w-4 h-4 flex-shrink-0"></i> Pagos
                 </button>
                 <button onclick="switchTab('carga')" id="btn-carga" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-slate-700 text-slate-300">
-                    <i data-lucide="upload-cloud"></i> Cargar Datos
+                    <i data-lucide="upload-cloud" class="w-4 h-4 flex-shrink-0"></i> Cargar Datos
                 </button>
                 <button onclick="switchTab('chat')" id="btn-chat" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-slate-700 text-slate-300">
-                    <i data-lucide="bot"></i> Asistente IA
+                    <i data-lucide="bot" class="w-4 h-4 flex-shrink-0"></i> Asistente IA
                 </button>
             </nav>
             
             <div class="p-4 border-t border-slate-700">
-                <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
+                <div class="flex items-center gap-3 px-2 py-2">
+                    <div class="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="user" class="w-4 h-4 text-orange-400"></i>
                     </div>
-                    <div class="flex-1">
-                        <p class="text-sm font-medium" id="sidebar-username">Gerente01</p>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium truncate" id="sidebar-username">Gerente01</p>
                         <p class="text-xs text-slate-400">Compras</p>
                     </div>
-                    <button onclick="doLogout()" title="Cerrar sesion" class="text-slate-500 hover:text-red-400 transition-colors">
+                    <button onclick="doLogout()" title="Cerrar sesion" class="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
                         <i data-lucide="log-out" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -101,21 +112,27 @@
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
-            <header class="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between px-8 z-10">
-                <h2 id="page-title" class="text-xl font-semibold">Tablero de Alertas</h2>
-                
-                <div class="flex items-center gap-4">
+        <main class="flex-1 flex flex-col h-screen overflow-hidden relative md:ml-0">
+            <header class="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between px-4 md:px-8 z-10">
+                <div class="flex items-center gap-3">
+                    <!-- Hamburger for mobile -->
+                    <button onclick="openSidebar()" class="md:hidden w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition-colors">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <h2 id="page-title" class="text-lg md:text-xl font-semibold">Tablero de Alertas</h2>
+                </div>
+                <div class="flex items-center gap-2 md:gap-4">
                     <div id="loading-indicator" class="flex items-center gap-2 text-orange-400 text-sm font-medium">
-                        <i data-lucide="loader-2" class="animate-spin w-4 h-4"></i> Procesando datos...
+                        <i data-lucide="loader-2" class="animate-spin w-4 h-4"></i>
+                        <span class="hidden sm:inline">Procesando...</span>
                     </div>
-                    <button class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition-colors">
-                        <i data-lucide="bell" class="w-5 h-5 text-slate-300"></i>
+                    <button class="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition-colors">
+                        <i data-lucide="bell" class="w-4 h-4 text-slate-300"></i>
                     </button>
                 </div>
             </header>
 
-            <div class="flex-1 overflow-auto p-8" id="main-scroll">
+            <div class="flex-1 overflow-auto p-3 md:p-8" id="main-scroll">
                 
                 <!-- Tab: Dashboard -->
                 <div id="tab-dashboard" class="tab-content block space-y-6">
@@ -191,15 +208,21 @@
                 <!-- Tab: Editar Ordenes -->
                 <div id="tab-ordenes" class="tab-content hidden space-y-4">
                     <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-lg flex flex-col" style="height: calc(100vh - 12rem);">
-                        <div class="p-5 border-b border-slate-700">
-                            <div class="flex items-center justify-between mb-3">
+                        <div class="p-4 md:p-5 border-b border-slate-700">
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                                 <div>
                                     <h3 class="text-lg font-bold">Editar Ordenes</h3>
                                     <p class="text-sm text-slate-400">Edita las cantidades y las alertas se recalcularan.</p>
                                 </div>
-                                <button onclick="exportDatosCompletos()" class="bg-orange-500 hover:bg-orange-600 px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-                                    <i data-lucide="download" class="w-4 h-4"></i> Exportar Analisis
-                                </button>
+                                <div class="flex gap-2 items-center flex-wrap">
+                                    <div class="relative">
+                                        <i data-lucide="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none"></i>
+                                        <input type="text" id="ordenes-search" placeholder="Buscar ingrediente..." class="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-orange-500 text-slate-200 w-40">
+                                    </div>
+                                    <button onclick="exportDatosCompletos()" class="bg-orange-500 hover:bg-orange-600 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+                                        <i data-lucide="download" class="w-4 h-4"></i> Exportar
+                                    </button>
+                                </div>
                             </div>
                             <div class="flex flex-wrap gap-2" id="ordenes-sucursal-btn-group">
                                 <button onclick="setOrdenesSucursal('all')" id="ord-suc-all" class="ord-suc-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 text-white">Todas las sucursales</button>
@@ -212,7 +235,7 @@
                                         <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Sucursal</th>
                                         <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Ingrediente</th>
                                         <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Formato</th>
-                                        <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Necesidad (Formatos)</th>
+                                        <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Necesidad</th>
                                         <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Pedido Actual</th>
                                         <th class="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Estado</th>
                                     </tr>
@@ -227,9 +250,11 @@
 
                 <!-- Tab: Proveedores -->
                 <div id="tab-proveedores" class="tab-content hidden space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="proveedores-container">
-                        <!-- Renderizado por JS -->
+                    <!-- Provider filter bar -->
+                    <div class="flex flex-wrap gap-2" id="proveedor-filter-group">
+                        <button onclick="setProveedorFilter('all')" id="prov-all" class="prov-btn px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-orange-500 text-white">Todos</button>
                     </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="proveedores-container"></div>
                 </div>
 
                 <!-- Tab: Redistribucion -->
@@ -240,6 +265,44 @@
                         
                         <div class="space-y-4" id="redistribucion-container">
                             <!-- Renderizado por JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Pagos -->
+                <div id="tab-pagos" class="tab-content hidden space-y-6">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-lg">
+                        <!-- Header + KPIs -->
+                        <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+                            <div>
+                                <h3 class="text-lg font-bold">Control de Pagos</h3>
+                                <p class="text-sm text-slate-400">Pedidos pagados y pendientes por sucursal.</p>
+                            </div>
+                            <div class="flex gap-3">
+                                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-center">
+                                    <p class="text-xs text-slate-400">Total Pagado</p>
+                                    <p class="text-xl font-bold text-emerald-400" id="pagos-total-pagado">-</p>
+                                </div>
+                                <div class="bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 text-center">
+                                    <p class="text-xs text-slate-400">Total Pendiente</p>
+                                    <p class="text-xl font-bold text-orange-400" id="pagos-total-pendiente">-</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Branch filter buttons -->
+                        <div class="flex flex-wrap gap-2 mb-5" id="pagos-sucursal-btn-group">
+                            <button onclick="setPagosSucursal('all')" id="pag-suc-all" class="pag-suc-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 text-white">Todas las sucursales</button>
+                        </div>
+                        <!-- Two columns: Pagados / Pendientes -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <h4 class="text-sm font-semibold text-emerald-400 flex items-center gap-2 mb-3"><i data-lucide="check-circle-2" class="w-4 h-4"></i> Pedidos Pagados</h4>
+                                <div class="space-y-3" id="pagos-pagados-list"></div>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-orange-400 flex items-center gap-2 mb-3"><i data-lucide="clock" class="w-4 h-4"></i> Pendientes de Pago</h4>
+                                <div class="space-y-3" id="pagos-pendientes-list"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -423,8 +486,19 @@
             const activeBtn = document.getElementById('btn-' + tabId);
             activeBtn.classList.remove('hover:bg-slate-700', 'text-slate-300');
             activeBtn.classList.add('bg-orange-500/10', 'text-orange-500', 'font-medium');
-            const titles = { 'dashboard': 'Tablero de Alertas', 'ordenes': 'Editar Ordenes', 'proveedores': 'Ordenes por Proveedor', 'redistribucion': 'Redistribucion de Inventario', 'chat': 'Asistente IA', 'carga': 'Carga de Datos' };
+            const titles = { 'dashboard': 'Tablero de Alertas', 'ordenes': 'Editar Ordenes', 'proveedores': 'Por Proveedor', 'redistribucion': 'Redistribucion', 'pagos': 'Control de Pagos', 'chat': 'Asistente IA', 'carga': 'Cargar Datos' };
             document.getElementById('page-title').innerText = titles[tabId] || tabId;
+            // Close sidebar on mobile after nav
+            if (window.innerWidth < 768) closeSidebar();
+        }
+
+        function openSidebar() {
+            document.getElementById('sidebar').classList.remove('-translate-x-full');
+            document.getElementById('sidebar-overlay').classList.remove('hidden');
+        }
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.add('-translate-x-full');
+            document.getElementById('sidebar-overlay').classList.add('hidden');
         }
 
         function setSeverity(sev) {
@@ -454,6 +528,28 @@
         }
 
         document.getElementById('filter-search')?.addEventListener('input', () => { renderAlertas(currentSucursal); });
+        document.getElementById('ordenes-search')?.addEventListener('input', () => { renderTablaOrdenes(currentOrdenesSucursal); });
+
+        // Pagos sucursal filter
+        let currentPagosSucursal = 'all';
+        function setPagosSucursal(suc) {
+            currentPagosSucursal = suc;
+            document.querySelectorAll('.pag-suc-btn').forEach(b => { b.classList.remove('bg-orange-500','text-white'); b.classList.add('bg-slate-700','text-slate-300'); });
+            const safeId = 'pag-suc-' + (suc === 'all' ? 'all' : suc.replace(/[\s]/g,'_'));
+            const btn = document.getElementById(safeId);
+            if(btn){ btn.classList.add('bg-orange-500','text-white'); btn.classList.remove('bg-slate-700','text-slate-300'); }
+            if(typeof renderPagos === 'function') renderPagos(suc);
+        }
+
+        // Provider filter
+        let currentProveedorFilter = 'all';
+        function setProveedorFilter(prov) {
+            currentProveedorFilter = prov;
+            document.querySelectorAll('.prov-btn').forEach(b => { b.classList.remove('bg-orange-500','text-white'); b.classList.add('bg-slate-700','text-slate-300'); });
+            const btn = document.getElementById('prov-' + (prov === 'all' ? 'all' : prov.replace(/[\s.]/g,'_')));
+            if(btn){ btn.classList.add('bg-orange-500','text-white'); btn.classList.remove('bg-slate-700','text-slate-300'); }
+            if(typeof renderPorProveedor === 'function') renderPorProveedor(prov);
+        }
     </script>
 </body>
 </html>
