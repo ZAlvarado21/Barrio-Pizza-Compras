@@ -389,6 +389,9 @@
                                 <h4 class="font-bold text-slate-200">Catálogo de ingredientes</h4>
                                 <p class="text-xs text-slate-400 mt-1">ingredientes.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-ingredientes" class="text-orange-400">Usando datos locales</span></span>
+                                <button type="button" onclick="eliminarArchivoSubido('ingredientes', event)" id="btn-delete-ingredientes" class="hidden text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 mt-3 z-20 relative font-medium">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar archivo subido
+                                </button>
                             </div>
                             
                             <div class="border-2 border-dashed border-slate-600 bg-slate-900/50 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-orange-500 transition-colors group relative overflow-hidden" id="dropzone-consumo">
@@ -399,6 +402,9 @@
                                 <h4 class="font-bold text-slate-200">Consumo histórico</h4>
                                 <p class="text-xs text-slate-400 mt-1">consumo_historico.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-consumo" class="text-orange-400">Usando datos locales</span></span>
+                                <button type="button" onclick="eliminarArchivoSubido('consumo', event)" id="btn-delete-consumo" class="hidden text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 mt-3 z-20 relative font-medium">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar archivo subido
+                                </button>
                             </div>
 
                             <div class="border-2 border-dashed border-slate-600 bg-slate-900/50 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-orange-500 transition-colors group relative overflow-hidden" id="dropzone-inventario">
@@ -409,6 +415,9 @@
                                 <h4 class="font-bold text-slate-200">Inventario actual</h4>
                                 <p class="text-xs text-slate-400 mt-1">inventario_actual.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-inventario" class="text-orange-400">Usando datos locales</span></span>
+                                <button type="button" onclick="eliminarArchivoSubido('inventario', event)" id="btn-delete-inventario" class="hidden text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 mt-3 z-20 relative font-medium">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar archivo subido
+                                </button>
                             </div>
 
                             <div class="border-2 border-dashed border-slate-600 bg-slate-900/50 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-orange-500 transition-colors group relative overflow-hidden" id="dropzone-ordenes">
@@ -419,6 +428,9 @@
                                 <h4 class="font-bold text-slate-200">Orden de compra</h4>
                                 <p class="text-xs text-slate-400 mt-1">orden_compra_semana.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-ordenes" class="text-orange-400">Usando datos locales</span></span>
+                                <button type="button" onclick="eliminarArchivoSubido('ordenes', event)" id="btn-delete-ordenes" class="hidden text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 mt-3 z-20 relative font-medium">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar archivo subido
+                                </button>
                             </div>
                         </div>
                     </div>

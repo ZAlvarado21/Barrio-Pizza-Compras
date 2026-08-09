@@ -9,6 +9,7 @@ let datos = {
 };
 
 let resultados = []; // Almacena el cruce y análisis
+let datosOriginales = {}; // Copia de respaldo para restaurar al eliminar archivo subido
 let api_key = "";
 let ai_provider = "openai";
 
@@ -96,6 +97,14 @@ async function cargarDatos() {
     datos.consumo = consumo;
     datos.inventario = inventario;
     datos.ordenes = ordenes;
+
+    // Guardar respaldo de datos originales
+    datosOriginales = {
+        ingredientes: JSON.parse(JSON.stringify(ingredientes)),
+        consumo: JSON.parse(JSON.stringify(consumo)),
+        inventario: JSON.parse(JSON.stringify(inventario)),
+        ordenes: JSON.parse(JSON.stringify(ordenes))
+    };
 }
 
 // Lógica Core: Procesamiento de datos y alertas
@@ -1135,34 +1144,71 @@ function getZScores(values) {
   return values.map(v => (v - mean) / std);
 }
 
-// --- NUEVA LOGICA DE DRAG & DROP (CSV + Excel) ---
+// --- NUEVA LOGICA DE DRAG & DROP (CSV + Excel) CON ELIMINACION ---
 window.handleFileUpload = function(input, type) {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
-    const name = file.name.toLowerCase();
+    const name = file.name;
+    const lowerName = name.toLowerCase();
     const statusEl = document.getElementById('status-' + type);
+    const btnDelete = document.getElementById('btn-delete-' + type);
 
-    if (name.endsWith('.csv')) {
+    function onUploadSuccess() {
+        if (statusEl) {
+            statusEl.innerText = 'Cargado: ' + name;
+            statusEl.className = 'text-emerald-400 font-bold';
+        }
+        if (btnDelete) btnDelete.classList.remove('hidden');
+        procesarDatos();
+        renderizarUI();
+    }
+
+    if (lowerName.endsWith('.csv')) {
         Papa.parse(file, {
             header: true, dynamicTyping: true, skipEmptyLines: true,
             complete: function(results) {
                 datos[type] = results.data;
-                if (statusEl) { statusEl.innerText = 'Actualizado correctamente'; statusEl.className = 'text-emerald-400 font-bold'; }
-                procesarDatos(); renderizarUI();
+                onUploadSuccess();
             }
         });
-    } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const wb = XLSX.read(e.target.result, { type: 'array' });
             const ws = wb.Sheets[wb.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(ws, { defval: '' });
             datos[type] = jsonData;
-            if (statusEl) { statusEl.innerText = 'Excel cargado correctamente'; statusEl.className = 'text-emerald-400 font-bold'; }
-            procesarDatos(); renderizarUI();
+            onUploadSuccess();
         };
         reader.readAsArrayBuffer(file);
     }
+};
+
+window.eliminarArchivoSubido = function(type, event) {
+    if (event) event.stopPropagation();
+    
+    // Restaurar datos iniciales
+    if (datosOriginales[type]) {
+        datos[type] = JSON.parse(JSON.stringify(datosOriginales[type]));
+    }
+    
+    // Resetear input de archivo
+    const input = document.getElementById('file-' + type);
+    if (input) input.value = '';
+    
+    // Resetear indicador visual y ocultar botón de eliminar
+    const statusEl = document.getElementById('status-' + type);
+    if (statusEl) {
+        statusEl.innerText = 'Usando datos locales';
+        statusEl.className = 'text-orange-400';
+    }
+    
+    const btnDelete = document.getElementById('btn-delete-' + type);
+    if (btnDelete) btnDelete.classList.add('hidden');
+
+    // Recalcular todo el sistema al instante
+    procesarDatos();
+    renderizarUI();
 };
 
 // --- RENDER ANOMALÍAS CRUZADAS ---
