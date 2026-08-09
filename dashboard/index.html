@@ -365,9 +365,19 @@
                 <!-- Tab: Carga de Datos -->
                 <div id="tab-carga" class="tab-content hidden space-y-6">
                     <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-lg p-6 flex flex-col">
-                        <div class="mb-6 border-b border-slate-700 pb-4">
-                            <h3 class="text-lg font-bold">Cargar Archivos</h3>
-                            <p class="text-sm text-slate-400">Se aceptan <span class="text-orange-400 font-medium">.csv</span> y <span class="text-orange-400 font-medium">.xlsx / .xls</span>. El analisis se recalculara al instante.</p>
+                        <div class="mb-6 border-b border-slate-700 pb-4 flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold">Cargar Archivos</h3>
+                                <p class="text-sm text-slate-400">Se aceptan <span class="text-orange-400 font-medium">.csv</span> y <span class="text-orange-400 font-medium">.xlsx / .xls</span>. El análisis se recalculará al instante.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <a href="ejemplo_ordenes_compra_actualizadas.xlsx" download class="text-xs bg-slate-700 hover:bg-slate-600 text-orange-400 border border-slate-600 px-3 py-2 rounded-xl transition-colors flex items-center gap-2 no-underline">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Descargar Excel Órdenes (.xlsx)
+                                </a>
+                                <a href="ejemplo_inventario_actualizado.xlsx" download class="text-xs bg-slate-700 hover:bg-slate-600 text-orange-400 border border-slate-600 px-3 py-2 rounded-xl transition-colors flex items-center gap-2 no-underline">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Descargar Excel Inventario (.xlsx)
+                                </a>
+                            </div>
                         </div>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -377,7 +387,7 @@
                                     <i data-lucide="clipboard-list" class="w-6 h-6"></i>
                                 </div>
                                 <h4 class="font-bold text-slate-200">Catálogo de ingredientes</h4>
-                                <p class="text-xs text-slate-400 mt-1">ingredientes.csv</p>
+                                <p class="text-xs text-slate-400 mt-1">ingredientes.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-ingredientes" class="text-orange-400">Usando datos locales</span></span>
                             </div>
                             
@@ -387,7 +397,7 @@
                                     <i data-lucide="trending-up" class="w-6 h-6"></i>
                                 </div>
                                 <h4 class="font-bold text-slate-200">Consumo histórico</h4>
-                                <p class="text-xs text-slate-400 mt-1">consumo_historico.csv</p>
+                                <p class="text-xs text-slate-400 mt-1">consumo_historico.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-consumo" class="text-orange-400">Usando datos locales</span></span>
                             </div>
 
@@ -397,7 +407,7 @@
                                     <i data-lucide="package" class="w-6 h-6"></i>
                                 </div>
                                 <h4 class="font-bold text-slate-200">Inventario actual</h4>
-                                <p class="text-xs text-slate-400 mt-1">inventario_actual.csv</p>
+                                <p class="text-xs text-slate-400 mt-1">inventario_actual.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-inventario" class="text-orange-400">Usando datos locales</span></span>
                             </div>
 
@@ -407,7 +417,7 @@
                                     <i data-lucide="shopping-cart" class="w-6 h-6"></i>
                                 </div>
                                 <h4 class="font-bold text-slate-200">Orden de compra</h4>
-                                <p class="text-xs text-slate-400 mt-1">orden_compra_semana.csv</p>
+                                <p class="text-xs text-slate-400 mt-1">orden_compra_semana.csv / .xlsx</p>
                                 <span class="text-[10px] font-mono text-slate-500 mt-3 px-2 py-1 bg-slate-800 rounded">Estado: <span id="status-ordenes" class="text-orange-400">Usando datos locales</span></span>
                             </div>
                         </div>

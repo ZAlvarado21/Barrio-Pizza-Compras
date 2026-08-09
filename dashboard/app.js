@@ -40,14 +40,14 @@ const PRECIOS_SIMULADOS = {
 
 // Mínimo de compra por proveedor para envío gratis
 const MINIMO_PROVEEDOR = {
-    "Molinos Central": 150,
+    "Molinos Central": 200,
     "Distrib. Bella Italia": 300,
-    "Importadora Istmo": 100,
-    "AgroFresco": 50,
-    "Hongos del Valle": 30,
-    "Verduras La Huerta": 50,
-    "Deli Gourmet": 100,
-    "EmpaqueTodo": 80
+    "Importadora Istmo": 350,        // Faltan $70.00 para envío gratis
+    "AgroFresco": 100,                // Faltan $47.00 para envío gratis
+    "Hongos del Valle": 120,          // Faltan $32.50 para envío gratis
+    "Verduras La Huerta": 150,        // Faltan $31.00 para envío gratis
+    "Deli Gourmet": 300,              // Faltan $45.00 para envío gratis
+    "EmpaqueTodo": 250                // Faltan $58.00 para envío gratis
 };
 
 // Función principal de inicialización
@@ -531,11 +531,29 @@ function renderPorProveedor(filtroProveedor) {
         const meta = PROV_META[prov] || { color: '#64748b', logo: `https://ui-avatars.com/api/?name=${encodeURIComponent(prov)}&background=64748b&color=fff&size=80&bold=true&rounded=true` };
 
         let envioAlert = '';
+        let badgeEnvio = '';
+
         if (minimo > 0 && data.totalCosto < minimo) {
             const faltante = minimo - data.totalCosto;
-            envioAlert = `<div class="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-2 items-center text-blue-400 text-xs font-medium"><i data-lucide="info" class="w-4 h-4 flex-shrink-0"></i> Faltan $${faltante.toFixed(2)} para envio gratis. Minimo: $${minimo}.</div>`;
+            badgeEnvio = `<span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] px-2.5 py-0.5 rounded-full font-semibold">Faltan $${faltante.toFixed(2)} para envío gratis</span>`;
+            envioAlert = `
+                <div class="mt-4 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-amber-400 text-xs font-semibold">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="alert-circle" class="w-4 h-4 text-amber-400 flex-shrink-0"></i>
+                        <span>Faltan exactamente <b class="text-sm text-amber-300 underline">$${faltante.toFixed(2)}</b> para calificar al envío gratis</span>
+                    </div>
+                    <span class="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-md text-[11px] font-mono">Mínimo: $${minimo.toFixed(2)}</span>
+                </div>`;
         } else if (minimo > 0) {
-            envioAlert = `<div class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex gap-2 items-center text-emerald-400 text-xs font-medium"><i data-lucide="check" class="w-4 h-4 flex-shrink-0"></i> Califica para envio gratis.</div>`;
+            badgeEnvio = `<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] px-2.5 py-0.5 rounded-full font-semibold">Envío gratis alcanzado</span>`;
+            envioAlert = `
+                <div class="mt-4 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-emerald-400 text-xs font-semibold">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
+                        <span>¡Pedido califica para envío gratis!</span>
+                    </div>
+                    <span class="bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-md text-[11px] font-mono">Total: $${data.totalCosto.toFixed(2)} / Mín. $${minimo.toFixed(2)}</span>
+                </div>`;
         }
 
         const div = document.createElement('div');
@@ -548,7 +566,10 @@ function renderPorProveedor(filtroProveedor) {
             <div class="flex items-center gap-4 mb-5 pb-4 border-b border-slate-700">
                 <img src="${meta.logo}" alt="${prov}" class="w-14 h-14 rounded-xl object-cover shadow-md flex-shrink-0" onerror="this.style.display='none'">
                 <div class="flex-1 min-w-0">
-                    <h4 class="text-lg font-bold" style="color:${meta.color}">${prov}</h4>
+                    <div class="flex flex-wrap items-center gap-2 mb-1">
+                        <h4 class="text-lg font-bold" style="color:${meta.color}">${prov}</h4>
+                        ${badgeEnvio}
+                    </div>
                     <p class="text-sm text-slate-400">${data.items.length} productos en esta orden</p>
                 </div>
                 <div class="text-right flex-shrink-0">
