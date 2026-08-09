@@ -39,3 +39,7 @@ Para armar la lógica y darle un toque más apegado a la realidad, tuve que asum
 - `datos/`: Carpeta con los CSV originales (`consumo_historico`, `ingredientes`, `inventario_actual`, `orden_compra_semana`).
 
 ---
+
+IMPORTANTE
+Usuario: Gerente01
+Contraseña: barriopizza
